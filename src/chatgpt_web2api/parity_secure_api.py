@@ -1,14 +1,17 @@
-"""Security boundary for the unified ChatGPT parity API."""
+"""Security and client-view boundary for the unified ChatGPT parity API."""
 
 from __future__ import annotations
 
+import asyncio
 import urllib.parse
 
 import aiohttp
 from aiohttp import web
 
+from .cdp_driver import AuthExpiredError
 from .parity_browser import ParityBrowserError
 from .parity_live_api import LiveParityAPIServer
+from .parity_view import normalize_client_conversation
 
 # Asset URLs are produced by ChatGPT's authenticated file-resolution endpoint,
 # but the bridge still treats the returned URL as untrusted before making a
@@ -27,7 +30,47 @@ _ALLOWED_ASSET_HOST_EXACT = {
 
 
 class SecureParityAPIServer(LiveParityAPIServer):
-    """Final service class: current parity + background events + SSRF guard."""
+    """Final service class: current parity, safe tree view and SSRF guard."""
+
+    async def _handle_conversation(self, request: web.Request) -> web.Response:
+        if err := self._check_auth(request):
+            return err
+        try:
+            raw = await self._driver.get_conversation(
+                request.match_info["conversation_id"]
+            )
+            if not raw:
+                return web.json_response(
+                    {"error": {"message": "Conversation not found"}},
+                    status=404,
+                )
+            data = normalize_client_conversation(raw)
+            if request.query.get("raw") == "1":
+                return web.json_response(
+                    {"object": "conversation", "data": data, "raw": raw}
+                )
+            return web.json_response({"object": "conversation", "data": data})
+        except Exception as exc:
+            return self._parity_error(exc)
+
+    async def _fetch_snapshot(
+        self, conversation_id: str
+    ) -> dict | None:
+        """Fetch a client-safe snapshot for rich send completion events."""
+        if not conversation_id:
+            return None
+        for attempt in range(6):
+            try:
+                raw = await self._driver.get_conversation(conversation_id)
+                if raw and raw.get("mapping"):
+                    return normalize_client_conversation(raw)
+            except AuthExpiredError:
+                raise
+            except Exception:
+                pass
+            if attempt < 5:
+                await asyncio.sleep(0.4 + 0.2 * attempt)
+        return None
 
     async def _handle_asset_download(
         self, request: web.Request
@@ -76,7 +119,11 @@ class SecureParityAPIServer(LiveParityAPIServer):
                     file_name = metadata.get("file_name")
                     if file_name:
                         encoded = urllib.parse.quote(str(file_name), safe="")
-                        disposition = "inline" if request.query.get("inline") == "1" else "attachment"
+                        disposition = (
+                            "inline"
+                            if request.query.get("inline") == "1"
+                            else "attachment"
+                        )
                         headers["Content-Disposition"] = (
                             f"{disposition}; filename*=UTF-8''{encoded}"
                         )
