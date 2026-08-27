@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev]"
       - name: Check imports
-        run: python -c "from chatgpt_web2api import __version__; from chatgpt_web2api.mcp_server import create_server; from chatgpt_web2api.parity_secure_api import SecureParityAPIServer; print('OK v' + __version__)"
+        run: python -c "from chatgpt_web2api import __version__; from chatgpt_web2api.mcp_server import create_server; from chatgpt_web2api.parity_privacy_api import PrivacyParityAPIServer; print('OK v' + __version__)"
       - name: Ruff (E/F/I/UP)
         run: ruff check src/ tests/
 
