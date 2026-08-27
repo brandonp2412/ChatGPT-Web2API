@@ -21,7 +21,7 @@ from .cdp_driver import CDPDriver
 from .chrome import ChromeProcess
 from .config import Config
 from .lock_resolver import OwnedTabRequiredError
-from .parity_full_api import FullParityAPIServer as APIServer
+from .parity_current_api import CurrentParityAPIServer as APIServer
 from .tab_registry import TabRegistry
 
 logger = logging.getLogger(__name__)
