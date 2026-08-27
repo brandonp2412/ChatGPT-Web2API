@@ -10,7 +10,6 @@ from typing import Any
 from aiohttp import web
 
 from .parity_current_api import CurrentParityAPIServer
-from .parity_models import normalize_conversation
 
 
 class LiveParityAPIServer(CurrentParityAPIServer):
@@ -56,9 +55,8 @@ class LiveParityAPIServer(CurrentParityAPIServer):
 
         try:
             while time.monotonic() < deadline:
-                raw = await self._driver.get_conversation(conversation_id)
-                if raw:
-                    conversation = normalize_conversation(raw)
+                conversation = await self._fetch_snapshot(conversation_id)
+                if conversation:
                     fingerprint = _fingerprint_conversation(conversation)
                     if fingerprint != last_conversation_fingerprint:
                         last_conversation_fingerprint = fingerprint
@@ -125,8 +123,10 @@ class LiveParityAPIServer(CurrentParityAPIServer):
                         },
                     )
                 await asyncio.sleep(interval)
-        except (ConnectionResetError, asyncio.CancelledError):
+        except ConnectionResetError:
             return response
+        except asyncio.CancelledError:
+            raise
 
         try:
             await _sse(
@@ -141,14 +141,16 @@ class LiveParityAPIServer(CurrentParityAPIServer):
 
 
 def _fingerprint_conversation(conversation: dict[str, Any]) -> str:
-    """Cheap stable signal for anything the visible active branch can render."""
+    """Stable signal for anything the visible conversation UI can render."""
     messages = conversation.get("messages") or []
+    nodes = conversation.get("nodes") or {}
     tail = messages[-1] if messages else {}
     return json.dumps(
         {
             "update_time": conversation.get("update_time"),
             "current_node": conversation.get("current_node"),
             "message_count": len(messages),
+            "node_count": len(nodes) if isinstance(nodes, dict) else 0,
             "tail_id": tail.get("id") if isinstance(tail, dict) else None,
             "tail_status": tail.get("status") if isinstance(tail, dict) else None,
             "tail_end_turn": tail.get("end_turn") if isinstance(tail, dict) else None,
