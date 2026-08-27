@@ -1,0 +1,109 @@
+"""Security boundary for the unified ChatGPT parity API."""
+
+from __future__ import annotations
+
+import urllib.parse
+
+import aiohttp
+from aiohttp import web
+
+from .parity_browser import ParityBrowserError
+from .parity_live_api import LiveParityAPIServer
+
+# Asset URLs are produced by ChatGPT's authenticated file-resolution endpoint,
+# but the bridge still treats the returned URL as untrusted before making a
+# server-side request. Keep generic cloud-storage domains out of this list: an
+# attacker can own an arbitrary Azure/S3 bucket, whereas these suffixes are
+# specific to OpenAI/ChatGPT plus the known DALL-E Azure account.
+_ALLOWED_ASSET_HOST_SUFFIXES = (
+    "oaiusercontent.com",
+    "oaistatic.com",
+    "chatgpt.com",
+    "openai.com",
+)
+_ALLOWED_ASSET_HOST_EXACT = {
+    "oaidalleapiprodscus.blob.core.windows.net",
+}
+
+
+class SecureParityAPIServer(LiveParityAPIServer):
+    """Final service class: current parity + background events + SSRF guard."""
+
+    async def _handle_asset_download(
+        self, request: web.Request
+    ) -> web.StreamResponse:
+        if err := self._check_auth(request):
+            return err
+        pointer = urllib.parse.unquote(request.match_info["asset_pointer"])
+        conversation_id = request.query.get("conversation_id")
+        try:
+            metadata = await self._parity_actions.asset_download_url(
+                pointer,
+                conversation_id=conversation_id,
+                inline=request.query.get("inline") == "1",
+            )
+            url = str(metadata.get("download_url") or "")
+            if not _is_allowed_asset_url(url):
+                raise ParityBrowserError(
+                    "ChatGPT returned an asset URL outside the allowed OpenAI hosts"
+                )
+
+            timeout = aiohttp.ClientTimeout(
+                total=None,
+                sock_connect=30,
+                sock_read=120,
+            )
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url, allow_redirects=False) as upstream:
+                    if 300 <= upstream.status < 400:
+                        raise ParityBrowserError(
+                            "ChatGPT asset URL attempted an unexpected redirect"
+                        )
+                    if upstream.status >= 400:
+                        preview = (await upstream.text())[:300]
+                        raise ParityBrowserError(
+                            "ChatGPT asset download failed "
+                            f"({upstream.status}): {preview}"
+                        )
+
+                    headers: dict[str, str] = {
+                        "X-Content-Type-Options": "nosniff",
+                    }
+                    if content_type := upstream.headers.get("Content-Type"):
+                        headers["Content-Type"] = content_type
+                    if content_length := upstream.headers.get("Content-Length"):
+                        headers["Content-Length"] = content_length
+                    file_name = metadata.get("file_name")
+                    if file_name:
+                        encoded = urllib.parse.quote(str(file_name), safe="")
+                        disposition = "inline" if request.query.get("inline") == "1" else "attachment"
+                        headers["Content-Disposition"] = (
+                            f"{disposition}; filename*=UTF-8''{encoded}"
+                        )
+
+                    response = web.StreamResponse(status=200, headers=headers)
+                    await response.prepare(request)
+                    async for chunk in upstream.content.iter_chunked(1024 * 1024):
+                        await response.write(chunk)
+                    await response.write_eof()
+                    return response
+        except Exception as exc:
+            return self._parity_error(exc)
+
+
+def _is_allowed_asset_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        return False
+    if parsed.username or parsed.password:
+        return False
+    host = parsed.hostname.rstrip(".").lower()
+    if host in _ALLOWED_ASSET_HOST_EXACT:
+        return True
+    return any(
+        host == suffix or host.endswith("." + suffix)
+        for suffix in _ALLOWED_ASSET_HOST_SUFFIXES
+    )
