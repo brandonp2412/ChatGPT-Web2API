@@ -16,12 +16,12 @@ import signal
 import sys
 import time
 
-from .api_server import APIServer
 from .breakers import BreakerRegistry
 from .cdp_driver import CDPDriver
 from .chrome import ChromeProcess
 from .config import Config
 from .lock_resolver import OwnedTabRequiredError
+from .parity_api import ParityAPIServer as APIServer
 from .tab_registry import TabRegistry
 
 logger = logging.getLogger(__name__)
@@ -230,8 +230,12 @@ class Service:
         print()
         print("  Endpoints:")
         print(f"    POST  {host}:{port}/v1/chat/completions")
+        print(f"    POST  {host}:{port}/v1/chat/send")
+        print(f"    POST  {host}:{port}/v1/attachments")
+        print(f"    GET   {host}:{port}/v1/conversations")
         print(f"    GET   {host}:{port}/v1/models")
         print(f"    GET   {host}:{port}/v1/projects")
+        print(f"    GET   {host}:{port}/v1/capabilities")
         print(f"    GET   {host}:{port}/health")
         print()
         print("  Ctrl+C to stop")
