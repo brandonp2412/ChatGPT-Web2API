@@ -9,6 +9,7 @@ import aiohttp
 from aiohttp import web
 
 from .cdp_driver import AuthExpiredError
+from .parity_branch import BranchController
 from .parity_browser import ParityBrowserError
 from .parity_live_api import LiveParityAPIServer
 from .parity_view import normalize_client_conversation
@@ -31,6 +32,39 @@ _ALLOWED_ASSET_HOST_EXACT = {
 
 class SecureParityAPIServer(LiveParityAPIServer):
     """Final service class: current parity, safe tree view and SSRF guard."""
+
+    def __init__(self, config, driver, breakers=None) -> None:
+        self._branch_controller = BranchController(driver)
+        super().__init__(config, driver, breakers=breakers)
+        self.app.router.add_post(
+            "/v1/conversations/{conversation_id}/branch/select",
+            self._handle_branch_select,
+        )
+
+    async def _handle_branch_select(self, request: web.Request) -> web.Response:
+        if err := self._check_auth(request):
+            return err
+        try:
+            body = await self._json_body(request)
+            target_node_id = str(body.get("target_node_id") or "").strip()
+            if not target_node_id:
+                return self._bad_request("target_node_id is required")
+            conversation_id = request.match_info["conversation_id"]
+            async with self._mutation_guard():
+                result = await self._branch_controller.select_node(
+                    conversation_id,
+                    target_node_id,
+                )
+            snapshot = await self._fetch_snapshot(conversation_id)
+            return web.json_response(
+                {
+                    "object": "branch.selection",
+                    "data": result,
+                    "conversation": snapshot,
+                }
+            )
+        except Exception as exc:
+            return self._parity_error(exc)
 
     async def _handle_conversation(self, request: web.Request) -> web.Response:
         if err := self._check_auth(request):
