@@ -2,7 +2,7 @@
 
 The bridge deliberately lets the *real ChatGPT SPA* own fragile conversation
 submission, Sentinel tokens, proof-of-work, file attachment state, and tool
-selection.  This module only drives user-visible controls or calls authenticated
+selection. This module only drives user-visible controls or calls authenticated
 read/upload endpoints from the already logged-in page.
 """
 
@@ -12,7 +12,6 @@ import asyncio
 import json
 import logging
 import mimetypes
-import os
 import re
 import shutil
 import tempfile
@@ -60,7 +59,7 @@ class StoredAttachment:
 class AttachmentStore:
     """One-shot attachment staging with private filesystem permissions.
 
-    Files exist only long enough for Chrome's file input to consume them.  They
+    Files exist only long enough for Chrome's file input to consume them. They
     are never placed under the source tree and are deleted after send, explicit
     DELETE, TTL expiry, or server cleanup.
     """
@@ -164,20 +163,94 @@ class ParityBrowser:
         "image": ("create image", "create an image", "image generation"),
         "deep_research": ("deep research", "research"),
         "study": ("study and learn", "study"),
+        # Canvas is a legacy/model-dependent ChatGPT feature. Keep the adapter
+        # because paid accounts can still expose it on compatible models.
+        "canvas": ("canvas", "open canvas", "create canvas"),
     }
 
     def __init__(self, driver: Any) -> None:
         self.driver = driver
 
+    async def discover_composer_tools(self) -> list[dict[str, str]]:
+        """Return tool/plugin labels exposed by the currently logged-in SPA.
+
+        This is intentionally UI-discovered instead of a static capability
+        catalog: tool names and account availability change by model, plan,
+        workspace and rollout. The caller can cache this briefly and refresh it
+        after model/project changes.
+        """
+        raw = await self.driver._js_strict(
+            """(async () => {
+              const norm = s => (s || '').replace(/\\s+/g, ' ').trim();
+              const visible = el => {
+                const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden';
+              };
+              const label = el => norm(el.innerText || el.textContent ||
+                el.getAttribute('aria-label') || el.getAttribute('title') || '');
+              const controls = () => [...document.querySelectorAll(
+                'button,[role="menuitem"],[role="option"],[role="button"],[data-testid]'
+              )].filter(visible);
+              const before = new Set(controls());
+              const opener = controls().find(el => {
+                const v = label(el).toLowerCase();
+                return v.includes('tool') || v.includes('more') || v.includes('attach') ||
+                  v.includes('add photos') || v === '+' || v === 'add';
+              });
+              if (opener) {
+                opener.click();
+                await new Promise(r => setTimeout(r, 350));
+              }
+              const seen = new Set(); const items = [];
+              for (const el of controls()) {
+                const value = label(el);
+                if (!value || value.length > 100 || seen.has(value)) continue;
+                const role = el.getAttribute('role') || '';
+                const testid = el.getAttribute('data-testid') || '';
+                if (!before.has(el) || role === 'menuitem' || role === 'option') {
+                  seen.add(value);
+                  items.push({label:value, role, testid});
+                }
+              }
+              if (opener) document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+              return JSON.stringify(items.slice(0, 100));
+            })()""",
+            timeout=10,
+        )
+        try:
+            decoded = json.loads(raw) if isinstance(raw, str) else raw
+        except json.JSONDecodeError:
+            decoded = []
+        if not isinstance(decoded, list):
+            return []
+        return [
+            {
+                "label": str(item.get("label", "")),
+                "role": str(item.get("role", "")),
+                "testid": str(item.get("testid", "")),
+            }
+            for item in decoded
+            if isinstance(item, dict) and item.get("label")
+        ]
+
     async def select_tool(self, mode: str | None) -> None:
-        """Select a composer tool through the SPA, if one was requested."""
+        """Select a built-in composer tool through the SPA, if requested."""
         clean = (mode or "normal").strip().lower().replace("-", "_").replace(" ", "_")
         if clean in {"", "normal", "chat", "auto"}:
             return
         aliases = self.TOOL_ALIASES.get(clean)
         if not aliases:
             raise ParityBrowserError(f"Unsupported composer mode: {mode}")
+        await self._select_composer_item(list(aliases), category="tool")
 
+    async def select_plugin(self, plugin_name: str | None) -> None:
+        """Select an installed ChatGPT plugin/app from the composer +/More menu."""
+        name = (plugin_name or "").strip()
+        if not name:
+            return
+        await self._select_composer_item([name], category="plugin")
+
+    async def _select_composer_item(self, aliases: list[str], *, category: str) -> None:
         raw = await self.driver._js_with_data_strict(
             """(async () => {
               const norm = s => (s || '').toLowerCase().replace(/\\s+/g, ' ').trim();
@@ -187,8 +260,7 @@ class ParityBrowser:
                 el.getAttribute('title'), el.getAttribute('data-testid')
               ].filter(Boolean).join(' '));
               const visible = el => {
-                const r = el.getBoundingClientRect();
-                const s = getComputedStyle(el);
+                const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
                 return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
               };
               const matches = el => {
@@ -196,34 +268,82 @@ class ParityBrowser:
                 return visible(el) && aliases.some(a => value === a || value.includes(a));
               };
               const candidates = () => [...document.querySelectorAll(
-                'button,[role="menuitem"],[role="option"],[data-testid]'
+                'button,[role="menuitem"],[role="option"],[role="button"],[data-testid]'
               )];
               let target = candidates().find(matches);
-              if (target) { target.click(); return JSON.stringify({ok:true, direct:true, label:label(target)}); }
+              if (target) { target.click(); return JSON.stringify({ok:true,direct:true,label:label(target)}); }
 
               const openers = candidates().filter(visible).filter(el => {
                 const value = label(el);
-                return value.includes('tool') || value.includes('more') ||
-                       value.includes('attach') || value.includes('add photos') ||
-                       value === '+' || value.includes('add');
+                return value.includes('tool') || value.includes('more') || value.includes('attach') ||
+                  value.includes('add photos') || value === '+' || value === 'add';
               });
-              if (openers.length) {
-                openers[0].click();
-                await new Promise(r => setTimeout(r, 450));
+              for (const opener of openers.slice(0, 4)) {
+                opener.click();
+                await new Promise(r => setTimeout(r, 350));
                 target = candidates().find(matches);
-                if (target) { target.click(); return JSON.stringify({ok:true, direct:false, label:label(target)}); }
+                if (target) { target.click(); return JSON.stringify({ok:true,direct:false,label:label(target)}); }
+                document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+                await new Promise(r => setTimeout(r, 100));
               }
               return JSON.stringify({ok:false});
             })()""",
-            {"aliases": list(aliases)},
-            timeout=10,
+            {"aliases": aliases},
+            timeout=12,
         )
         result = _json_dict(raw)
         if not result.get("ok"):
             raise ParityBrowserError(
-                f"ChatGPT composer does not currently expose the {mode!r} tool"
+                f"ChatGPT composer does not currently expose requested {category}: {aliases[0]!r}"
             )
         await asyncio.sleep(0.35)
+
+    async def set_temporary_chat(
+        self,
+        enabled: bool,
+        *,
+        personalized: bool = False,
+    ) -> None:
+        """Set ChatGPT's Temporary Chat state through the page control.
+
+        New Temporary Chats are non-personalized by default. If ChatGPT exposes
+        the personalization choice after enabling Temporary, this method chooses
+        the requested option. It is a no-op when the UI is already in the
+        requested state.
+        """
+        raw = await self.driver._js_with_data_strict(
+            """(async () => {
+              const norm = s => (s || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+              const visible = el => { const r=el.getBoundingClientRect(); const s=getComputedStyle(el);
+                return r.width>0 && r.height>0 && s.display!=='none' && s.visibility!=='hidden'; };
+              const label = el => norm([el.innerText,el.textContent,el.getAttribute('aria-label'),
+                el.getAttribute('title')].filter(Boolean).join(' '));
+              const controls = [...document.querySelectorAll('button,[role="button"],[role="switch"]')].filter(visible);
+              const button = controls.find(el => label(el).includes('temporary'));
+              if (!button) return JSON.stringify({ok:false,stage:'missing'});
+              const pressed = button.getAttribute('aria-pressed');
+              const checked = button.getAttribute('aria-checked');
+              const active = pressed === 'true' || checked === 'true' ||
+                /temporary chat on|exit temporary|turn off temporary/.test(label(button));
+              if (active !== __D.enabled) {
+                button.click(); await new Promise(r => setTimeout(r, 350));
+              }
+              if (__D.enabled) {
+                const options = [...document.querySelectorAll('button,[role="button"],[role="option"],[role="radio"]')]
+                  .filter(visible);
+                const wanted = __D.personalized ? ['personalized'] : ['non-personalized','without personalization'];
+                const option = options.find(el => wanted.some(x => label(el).includes(x)));
+                if (option) option.click();
+              }
+              return JSON.stringify({ok:true,changed:active !== __D.enabled});
+            })()""",
+            {"enabled": enabled, "personalized": personalized},
+            timeout=10,
+        )
+        result = _json_dict(raw)
+        if not result.get("ok"):
+            raise ParityBrowserError("Temporary Chat is not exposed by the current ChatGPT page")
+        await asyncio.sleep(0.25)
 
     async def attach_files(self, attachments: list[StoredAttachment]) -> None:
         """Feed local files into ChatGPT's real file input using CDP.
@@ -258,11 +378,9 @@ class ParityBrowser:
         if response.get("error"):
             raise ParityBrowserError(f"CDP file attachment failed: {response['error']}")
 
-        # Wait until React has consumed the file input / rendered attachment UI.
         raw = await self.driver._js_with_data_strict(
             """(async () => {
-              const wanted = __D.names;
-              const deadline = Date.now() + 30000;
+              const wanted = __D.names; const deadline = Date.now() + 30000;
               while (Date.now() < deadline) {
                 const body = (document.body && document.body.innerText) || '';
                 const inputs = [...document.querySelectorAll('input[type="file"]')];
@@ -306,11 +424,11 @@ class ParityBrowser:
         result = await self.driver._js_with_data_strict(
             """(async () => {
               const r = await fetch('/backend-api/stop_conversation', {
-                method: 'POST', credentials: 'include',
-                headers: {'Content-Type':'application/json', 'Authorization':'Bearer ' + __D.token},
-                body: JSON.stringify({conversation_id: __D.conversation_id})
+                method:'POST', credentials:'include',
+                headers:{'Content-Type':'application/json','Authorization':'Bearer ' + __D.token},
+                body:JSON.stringify({conversation_id:__D.conversation_id})
               });
-              return JSON.stringify({ok:r.ok, status:r.status, text:(await r.text()).slice(0,300)});
+              return JSON.stringify({ok:r.ok,status:r.status,text:(await r.text()).slice(0,300)});
             })()""",
             {"token": token, "conversation_id": conversation_id},
             timeout=15,
@@ -330,12 +448,11 @@ class ParityBrowser:
                 method:'POST', credentials:'include',
                 headers:{'Content-Type':'application/json','Authorization':'Bearer ' + __D.token},
                 body:JSON.stringify({
-                  file_name:__D.name, file_size:__D.size,
-                  use_case:__D.use_case, mime_type:__D.mime_type,
-                  supports_direct_azure_multipart:true
+                  file_name:__D.name,file_size:__D.size,use_case:__D.use_case,
+                  mime_type:__D.mime_type,supports_direct_azure_multipart:true
                 })
               });
-              return JSON.stringify({status:r.status, ok:r.ok, data:await r.json()});
+              return JSON.stringify({status:r.status,ok:r.ok,data:await r.json()});
             })()""",
             {
                 "token": token,
@@ -378,8 +495,7 @@ class ParityBrowser:
             """(async () => {
               const r = await fetch('/backend-api/files/' + encodeURIComponent(__D.file_id) + '/uploaded', {
                 method:'POST', credentials:'include',
-                headers:{'Content-Type':'application/json','Authorization':'Bearer ' + __D.token},
-                body:'{}'
+                headers:{'Content-Type':'application/json','Authorization':'Bearer ' + __D.token}, body:'{}'
               });
               let data = {}; try { data = await r.json(); } catch (_) {}
               return JSON.stringify({ok:r.ok,status:r.status,data});
@@ -433,14 +549,12 @@ class ParityBrowser:
               const session = {...__D.session};
               session.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
               session.timezone_offset_min = new Date().getTimezoneOffset();
-              const form = new FormData();
-              form.append('sdp', __D.sdp);
+              const form = new FormData(); form.append('sdp', __D.sdp);
               form.append('session', JSON.stringify(session));
               const r = await fetch('/realtime/wm?dcid=0', {
-                method:'POST', credentials:'include',
-                headers:{'Authorization':'Bearer ' + __D.token}, body:form
+                method:'POST',credentials:'include',headers:{'Authorization':'Bearer ' + __D.token},body:form
               });
-              return JSON.stringify({status:r.status, ok:r.ok, text:await r.text(), ctype:r.headers.get('content-type') || ''});
+              return JSON.stringify({status:r.status,ok:r.ok,text:await r.text(),ctype:r.headers.get('content-type') || ''});
             })()""",
             {"sdp": offer_sdp, "session": session, "token": token},
             timeout=75,
@@ -478,8 +592,7 @@ class ParityBrowser:
               const label = el => ((el.getAttribute('aria-label') || '') + ' ' +
                 (el.getAttribute('title') || '') + ' ' + (el.innerText || '')).toLowerCase();
               const el = items.find(x => /attach|add photo|add file|upload/.test(label(x)) || label(x).trim() === '+');
-              if (!el) return 'false';
-              el.click(); return 'true';
+              if (!el) return 'false'; el.click(); return 'true';
             })()""",
             timeout=5,
         )
