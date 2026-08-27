@@ -12,6 +12,14 @@ async def _guard():
     yield
 
 
+def _guard_factory():
+    return _guard()
+
+
+def _timeout(_body, _mode):
+    return 120.0
+
+
 @pytest.mark.asyncio
 async def test_rich_send_navigates_before_model_and_composer_controls():
     order: list[str] = []
@@ -20,8 +28,8 @@ async def test_rich_send_navigates_before_model_and_composer_controls():
         chatgpt=SimpleNamespace(default_model="auto"),
     )
     server._last_project_id = None
-    server._mutation_guard = lambda: _guard()
-    server._send_timeout = lambda body, mode: 120.0
+    server._mutation_guard = _guard_factory
+    server._send_timeout = _timeout
 
     driver = MagicMock()
     driver.navigate_new_chat = AsyncMock(
@@ -95,7 +103,7 @@ async def test_rich_send_rejects_temporary_on_existing_conversation():
     server._config = SimpleNamespace(
         chatgpt=SimpleNamespace(default_model="auto"),
     )
-    server._send_timeout = lambda body, mode: 120.0
+    server._send_timeout = _timeout
 
     response = await server._execute_rich_send(
         MagicMock(),
