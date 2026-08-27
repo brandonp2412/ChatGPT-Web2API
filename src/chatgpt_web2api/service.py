@@ -42,17 +42,25 @@ class Service:
         """Start the full system."""
         cfg = self._config
 
+        # Enable reactive diagnostics capture if the operator opted in.
+        # Off by default; only writes artifacts when W2A_DIAGNOSE=1.
         from .diagnostics import apply_env_enablement
 
         apply_env_enablement()
 
+        # 0. Circuit-breaker registry (Phase 4 PR2) — one per REST process,
+        # shared by Chrome (crash-loop), the CDP driver (auth/composer/CDP),
+        # and the API server (snapshot + fail-fast). Constructed first so every
+        # component below can record into the same registry.
         self._breakers = BreakerRegistry()
 
+        # 1. Chrome
         logger.info("Ensuring Chrome is running...")
         self._chrome = ChromeProcess(cfg, breakers=self._breakers)
         await self._chrome.ensure_running()
         await self._chrome.start_monitor()
 
+        # 2. CDP driver (with login detection)
         logger.info("Connecting CDP driver...")
         self._driver = CDPDriver(
             cdp_port=cfg.chrome.cdp_port,
@@ -68,16 +76,21 @@ class Service:
         try:
             await self._driver.connect()
         except OwnedTabRequiredError:
+            # Parallel-mode fail-closed must propagate, not become a login wait.
             raise
         except Exception as e:
             logger.info("Auth failed: %s — waiting for login", e)
+            # Not logged in — wait for user to complete login
             await self._wait_for_login()
             await self._driver.connect()
 
+        # 3. API server
         self._server = APIServer(cfg, self._driver, breakers=self._breakers)
         self._runner = await self._start_server()
 
         self._print_banner()
+
+        # 4. Wait for shutdown signal
         await self._shutdown_event.wait()
 
     async def _wait_for_login(self, timeout: int = 300) -> None:
@@ -91,6 +104,7 @@ class Service:
         print("  Waiting for login...")
         print()
 
+        # Navigate to login page if not already there
         try:
             await self._driver._cdp("Page.navigate", {"url": "https://chatgpt.com/"})
         except Exception:
@@ -99,6 +113,7 @@ class Service:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
+                # Try to get an auth token
                 raw = await self._driver._js(
                     "(async () => {"
                     "  try {"
@@ -137,7 +152,7 @@ class Service:
         from aiohttp import web
 
         cfg = self._config
-        self._check_bind_safety(cfg)
+        self._check_bind_safety(cfg)  # fail-fast before binding
 
         runner = web.AppRunner(self._server.app)
         await runner.setup()
@@ -149,9 +164,22 @@ class Service:
 
     @staticmethod
     def _check_bind_safety(cfg: Config) -> None:
-        """Fail-fast guard against exposing an unauthenticated API remotely."""
+        """Fail-fast guard against exposing an unauthenticated API remotely.
+
+        Behavior matrix (agreed in review):
+          loopback + no keys              → allow, banner "local no-auth"
+          non-loopback + keys             → allow, banner "remote with auth"
+          non-loopback + no keys, no env  → raise (fail startup)
+          non-loopback + no keys + env    → allow, LOUD warning
+
+        The env override is ``W2A_ALLOW_UNAUTH_REMOTE=1``. The error message
+        names it so a user who hits the failure knows the escape hatch.
+        """
         import os
 
+        # Normalize empty/None to explicit loopback — security defaults must
+        # not rely on empty-string semantics (aiohttp's empty-host bind is
+        # loopback today, but making it explicit avoids ambiguity).
         host = (cfg.server.host or "127.0.0.1").lower()
         loopback = host in ("127.0.0.1", "::1", "localhost")
         has_keys = bool(cfg.server.api_keys)
@@ -224,9 +252,13 @@ async def run_service(config: Config) -> None:
 
     loop = asyncio.get_running_loop()
 
+    # Signal handlers (Unix)
     if sys.platform != "win32":
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, service.request_shutdown)
+    else:
+        # Windows: Ctrl+C raises KeyboardInterrupt in asyncio.run()
+        pass
 
     try:
         await service.start()
