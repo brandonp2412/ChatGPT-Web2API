@@ -14,6 +14,7 @@ from .parity_branch import BranchController
 from .parity_browser import ParityBrowserError
 from .parity_live_api import LiveParityAPIServer
 from .parity_projects import ProjectController
+from .parity_research import RichConversationController, extract_research_reports
 from .parity_view import normalize_client_conversation
 
 # Asset URLs are produced by ChatGPT's authenticated file-resolution endpoint,
@@ -38,6 +39,7 @@ class SecureParityAPIServer(LiveParityAPIServer):
     def __init__(self, config, driver, breakers=None) -> None:
         self._branch_controller = BranchController(driver)
         self._project_controller = ProjectController(driver)
+        self._rich_conversation = RichConversationController(driver)
         super().__init__(config, driver, breakers=breakers)
         self.app.router.add_post(
             "/v1/conversations/{conversation_id}/branch/select",
@@ -111,7 +113,7 @@ class SecureParityAPIServer(LiveParityAPIServer):
         if err := self._check_auth(request):
             return err
         try:
-            raw = await self._driver.get_conversation(
+            raw = await self._rich_conversation.fetch(
                 request.match_info["conversation_id"]
             )
             if not raw:
@@ -119,7 +121,7 @@ class SecureParityAPIServer(LiveParityAPIServer):
                     {"error": {"message": "Conversation not found"}},
                     status=404,
                 )
-            data = normalize_client_conversation(raw)
+            data = _client_view(raw)
             if request.query.get("raw") == "1":
                 return web.json_response(
                     {"object": "conversation", "data": data, "raw": raw}
@@ -129,14 +131,14 @@ class SecureParityAPIServer(LiveParityAPIServer):
             return self._parity_error(exc)
 
     async def _fetch_snapshot(self, conversation_id: str) -> dict | None:
-        """Fetch a client-safe snapshot for rich send completion events."""
+        """Fetch a client-safe snapshot for rich send/background events."""
         if not conversation_id:
             return None
         for attempt in range(6):
             try:
-                raw = await self._driver.get_conversation(conversation_id)
+                raw = await self._rich_conversation.fetch(conversation_id)
                 if raw and raw.get("mapping"):
-                    return normalize_client_conversation(raw)
+                    return _client_view(raw)
             except AuthExpiredError:
                 raise
             except Exception:
@@ -215,6 +217,14 @@ class SecureParityAPIServer(LiveParityAPIServer):
                     await response.write(chunk)
                 await response.write_eof()
                 return response
+
+
+def _client_view(raw: dict[str, Any]) -> dict[str, Any]:
+    data = normalize_client_conversation(raw)
+    reports = extract_research_reports(raw)
+    if reports:
+        data["research_reports"] = reports
+    return data
 
 
 def _is_allowed_asset_url(url: str) -> bool:
