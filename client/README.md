@@ -51,7 +51,7 @@ The Flutter client covers the normal consumer ChatGPT Chat workflow exposed by t
 - Projects: list, create, instructions, conversations, files/download and delete
 - custom GPT list/start-chat
 - Memory list/create/delete
-- Deep Research interactive plan/action controls and reports
+- Deep Research interactive plan/action controls and reports; report attachments retain metadata even when bridge context is not supplied to an embedded report view
 - native WebRTC Voice with local microphone/audio, voice selection, mute/end and conversation/project context
 
 Canvas is intentionally not exposed: current ChatGPT uses normal writing/code blocks and the backend privacy/capability layer reports Canvas as deprecated.
