@@ -16,7 +16,7 @@ flutter analyze
 flutter test
 ```
 
-CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs analysis/tests, and builds a debug APK. This deliberately validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
+CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs analysis/tests, and builds a debug APK. This validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
 
 For a generated Android runner, ensure `android/app/src/main/AndroidManifest.xml` contains:
 
@@ -51,7 +51,7 @@ The Flutter client covers the normal consumer ChatGPT Chat workflow exposed by t
 - Projects: list, create, instructions, conversations, files/download and delete
 - custom GPT list/start-chat
 - Memory list/create/delete
-- Deep Research interactive plan/action controls and reports; report attachments retain metadata even when bridge context is not supplied to an embedded report view
+- Deep Research interactive plan/action controls, reports and attachment metadata
 - native WebRTC Voice with local microphone/audio, voice selection, mute/end and conversation/project context
 
 Canvas is intentionally not exposed: current ChatGPT uses normal writing/code blocks and the backend privacy/capability layer reports Canvas as deprecated.
