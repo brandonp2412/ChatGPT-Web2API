@@ -1,5 +1,5 @@
-import 'package:chatgpt_bridge_client/src/model/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sloppa/src/model/chat_models.dart';
 
 void main() {
   test('parses rich message.delta SSE events', () {
