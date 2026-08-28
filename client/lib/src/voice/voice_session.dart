@@ -124,7 +124,8 @@ class VoiceSession extends ChangeNotifier {
         RTCSessionDescription(negotiation.answerSdp, 'answer'),
       );
 
-      if (peer.connectionState == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      if (peer.connectionState ==
+          RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         state = VoiceSessionState.connected;
       }
       notifyListeners();
@@ -160,24 +161,24 @@ class VoiceSession extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    switch (connectionState) {
-      case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
-        state = VoiceSessionState.connected;
-      case RTCPeerConnectionState.RTCPeerConnectionStateFailed:
+    if (connectionState ==
+        RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      state = VoiceSessionState.connected;
+    } else if (connectionState ==
+        RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+      state = VoiceSessionState.failed;
+      errorMessage ??= 'Voice connection failed';
+    } else if (connectionState ==
+        RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+      if (state == VoiceSessionState.connected) {
         state = VoiceSessionState.failed;
-        errorMessage ??= 'Voice connection failed';
-      case RTCPeerConnectionState.RTCPeerConnectionStateDisconnected:
-        if (state == VoiceSessionState.connected) {
-          state = VoiceSessionState.failed;
-          errorMessage ??= 'Voice connection disconnected';
-        }
-      case RTCPeerConnectionState.RTCPeerConnectionStateClosed:
-        if (state != VoiceSessionState.failed) {
-          state = VoiceSessionState.ended;
-        }
-      case RTCPeerConnectionState.RTCPeerConnectionStateNew:
-      case RTCPeerConnectionState.RTCPeerConnectionStateConnecting:
-        break;
+        errorMessage ??= 'Voice connection disconnected';
+      }
+    } else if (connectionState ==
+        RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+      if (state != VoiceSessionState.failed) {
+        state = VoiceSessionState.ended;
+      }
     }
     notifyListeners();
   }
