@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sloppa-backend"
+name = "sloppa"
 version = "0.2.0"
-description = "Sloppa backend: subscription-backed ChatGPT bridge driven through Chrome CDP"
+description = "Sloppa subscription-backed ChatGPT bridge driven through Chrome CDP"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -42,9 +42,11 @@ Repository = "https://github.com/brandonp2412/ChatGPT-Web2API"
 Issues = "https://github.com/brandonp2412/ChatGPT-Web2API/issues"
 
 [project.scripts]
+sloppa = "chatgpt_web2api.__main__:main"
+sloppa-mcp = "chatgpt_web2api.mcp_server:main"
+# Compatibility aliases while existing installs/scripts migrate.
 sloppa-backend = "chatgpt_web2api.__main__:main"
 sloppa-backend-mcp = "chatgpt_web2api.mcp_server:main"
-# Compatibility aliases while existing installs/scripts migrate.
 chatgpt-web2api = "chatgpt_web2api.__main__:main"
 chatgpt-web2api-mcp = "chatgpt_web2api.mcp_server:main"
 
