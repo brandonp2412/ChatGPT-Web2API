@@ -66,6 +66,23 @@ jobs:
       - name: Generate Android runner
         working-directory: client
         run: flutter create --platforms=android --project-name chatgpt_bridge_client .
+      - name: Require microphone and network permissions
+        working-directory: client
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('android/app/src/main/AndroidManifest.xml')
+          text = path.read_text()
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          permissions = (
+              '\n    <uses-permission android:name="android.permission.INTERNET" />'
+              '\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
+          )
+          if 'android.permission.RECORD_AUDIO' not in text:
+              text = text.replace(marker, marker + permissions)
+          path.write_text(text)
+          PY
       - name: Install client dependencies
         working-directory: client
         run: flutter pub get
