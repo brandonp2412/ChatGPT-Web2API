@@ -51,6 +51,7 @@ class _ChatHomeState extends State<ChatHome> {
             final sidebar = _Sidebar(
               controller: controller,
               searchController: _search,
+              onCreateProject: _createProject,
             );
             return Scaffold(
               drawer: wide ? null : Drawer(child: SafeArea(child: sidebar)),
@@ -82,12 +83,20 @@ class _ChatHomeState extends State<ChatHome> {
                           )
                         : const Icon(Icons.refresh),
                   ),
+                  if (controller.activeProject != null)
+                    IconButton(
+                      tooltip: 'Project settings',
+                      onPressed: controller.parityActionBusy
+                          ? null
+                          : () => _showProjectSettings(context),
+                      icon: const Icon(Icons.folder_open_outlined),
+                    ),
                   if (controller.activeConversation != null)
                     PopupMenuButton<_ConversationMenuAction>(
                       tooltip: 'Chat actions',
                       onSelected: _handleConversationMenu,
-                      itemBuilder: (BuildContext context) => const <PopupMenuEntry<_ConversationMenuAction>>[
-                        PopupMenuItem(
+                      itemBuilder: (BuildContext context) => <PopupMenuEntry<_ConversationMenuAction>>[
+                        const PopupMenuItem(
                           value: _ConversationMenuAction.rename,
                           child: ListTile(
                             dense: true,
@@ -96,6 +105,28 @@ class _ChatHomeState extends State<ChatHome> {
                           ),
                         ),
                         PopupMenuItem(
+                          value: _ConversationMenuAction.pin,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(
+                              controller.activeConversationPinned
+                                  ? Icons.push_pin
+                                  : Icons.push_pin_outlined,
+                            ),
+                            title: Text(
+                              controller.activeConversationPinned ? 'Unpin' : 'Pin',
+                            ),
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: _ConversationMenuAction.share,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.ios_share_outlined),
+                            title: Text('Share'),
+                          ),
+                        ),
+                        const PopupMenuItem(
                           value: _ConversationMenuAction.archive,
                           child: ListTile(
                             dense: true,
@@ -103,7 +134,7 @@ class _ChatHomeState extends State<ChatHome> {
                             title: Text('Archive'),
                           ),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: _ConversationMenuAction.delete,
                           child: ListTile(
                             dense: true,
@@ -113,6 +144,11 @@ class _ChatHomeState extends State<ChatHome> {
                         ),
                       ],
                     ),
+                  IconButton(
+                    tooltip: 'Memory',
+                    onPressed: controller.connected ? () => _showMemories(context) : null,
+                    icon: const Icon(Icons.psychology_outlined),
+                  ),
                   IconButton(
                     tooltip: 'Settings',
                     onPressed: () => _showSettings(context),
@@ -189,7 +225,8 @@ class _ChatHomeState extends State<ChatHome> {
 
   Widget _messageList() {
     final messageCount = controller.visibleMessages.length;
-    final reports = controller.activeConversation?.researchReports ?? const <ResearchReport>[];
+    final reports = controller.activeConversation?.researchReports ??
+        const <ResearchReport>[];
     final total = messageCount + reports.length;
     if (total == 0) {
       final contextLabel = controller.activeProject != null
@@ -218,10 +255,18 @@ class _ChatHomeState extends State<ChatHome> {
             key: ValueKey<String>('message-${message.id}-$index'),
             message: message,
             conversation: controller.activeConversation,
+            settings: controller.settings,
             onSelectBranch: controller.selectBranch,
             onRegenerate: controller.regenerate,
             onEdit: controller.editMessage,
             onBranchInNewChat: controller.branchInNewChat,
+            onBlockAction: (
+              ChatMessage message,
+              String action,
+              String? text,
+            ) =>
+                controller.runBlockAction(message, action, text: text),
+            onFeedback: controller.sendFeedback,
           );
         }
         final report = reports[index - messageCount];
@@ -295,7 +340,8 @@ class _ChatHomeState extends State<ChatHome> {
                         _pickLibraryFiles();
                       }
                     },
-                    itemBuilder: (BuildContext context) => const <PopupMenuEntry<_AttachmentAction>>[
+                    itemBuilder: (BuildContext context) =>
+                        const <PopupMenuEntry<_AttachmentAction>>[
                       PopupMenuItem(
                         value: _AttachmentAction.upload,
                         child: ListTile(
@@ -452,43 +498,94 @@ class _ChatHomeState extends State<ChatHome> {
   }
 
   Future<void> _handleConversationMenu(_ConversationMenuAction action) async {
-    if (action == _ConversationMenuAction.rename) {
-      final active = controller.activeConversation;
-      if (active == null) {
-        return;
-      }
-      final text = TextEditingController(text: active.title);
-      final result = await showDialog<String>(
-        context: context,
-        builder: (BuildContext context) => AlertDialog(
-          title: const Text('Rename chat'),
-          content: TextField(controller: text, autofocus: true),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, text.text),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      );
-      text.dispose();
-      if (result != null) {
-        await controller.renameActiveConversation(result);
-      }
+    switch (action) {
+      case _ConversationMenuAction.rename:
+        await _renameChat();
+      case _ConversationMenuAction.pin:
+        await controller.toggleActivePin();
+      case _ConversationMenuAction.share:
+        await _shareChat();
+      case _ConversationMenuAction.archive:
+        await _confirmConversationMutation(delete: false);
+      case _ConversationMenuAction.delete:
+        await _confirmConversationMutation(delete: true);
+    }
+  }
+
+  Future<void> _renameChat() async {
+    final active = controller.activeConversation;
+    if (active == null) {
       return;
     }
+    final text = TextEditingController(text: active.title);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Rename chat'),
+        content: TextField(controller: text, autofocus: true),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    text.dispose();
+    if (result != null) {
+      await controller.renameActiveConversation(result);
+    }
+  }
 
-    final destructive = action == _ConversationMenuAction.delete;
+  Future<void> _shareChat() async {
+    final share = await controller.shareActiveConversation();
+    if (!mounted || share == null) {
+      return;
+    }
+    final display = share.url ?? share.id;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Share chat'),
+        content: SizedBox(
+          width: 520,
+          child: SelectableText(display),
+        ),
+        actions: <Widget>[
+          TextButton.icon(
+            onPressed: () => Clipboard.setData(ClipboardData(text: display)),
+            icon: const Icon(Icons.copy_outlined),
+            label: const Text('Copy'),
+          ),
+          TextButton(
+            onPressed: () async {
+              await controller.deleteActiveShare();
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Revoke'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmConversationMutation({required bool delete}) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: Text(destructive ? 'Delete chat?' : 'Archive chat?'),
+        title: Text(delete ? 'Delete chat?' : 'Archive chat?'),
         content: Text(
-          destructive
+          delete
               ? 'This removes the conversation from ChatGPT.'
               : 'This archives the conversation in ChatGPT.',
         ),
@@ -499,7 +596,7 @@ class _ChatHomeState extends State<ChatHome> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(destructive ? 'Delete' : 'Archive'),
+            child: Text(delete ? 'Delete' : 'Archive'),
           ),
         ],
       ),
@@ -507,10 +604,276 @@ class _ChatHomeState extends State<ChatHome> {
     if (confirmed != true) {
       return;
     }
-    if (destructive) {
+    if (delete) {
       await controller.deleteActiveConversation();
     } else {
       await controller.archiveActiveConversation();
+    }
+  }
+
+  Future<void> _showMemories(BuildContext context) async {
+    await controller.loadMemories();
+    if (!mounted) {
+      return;
+    }
+    final input = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) {
+          final items = controller.memoryItems;
+          return AlertDialog(
+            title: const Text('Memory'),
+            content: SizedBox(
+              width: 560,
+              height: 480,
+              child: Column(
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: TextField(
+                          controller: input,
+                          decoration: const InputDecoration(
+                            labelText: 'Add a memory',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        tooltip: 'Add memory',
+                        onPressed: () async {
+                          await controller.createMemory(input.text);
+                          input.clear();
+                          setDialogState(() {});
+                        },
+                        icon: const Icon(Icons.add),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: items.isEmpty
+                        ? const Center(child: Text('No saved memories'))
+                        : ListView.builder(
+                            itemCount: items.length,
+                            itemBuilder: (BuildContext context, int index) {
+                              final item = items[index];
+                              return ListTile(
+                                title: Text(item.content),
+                                trailing: item.id.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: 'Delete memory',
+                                        onPressed: () async {
+                                          await controller.deleteMemory(item.id);
+                                          setDialogState(() {});
+                                        },
+                                        icon: const Icon(Icons.delete_outline),
+                                      ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    input.dispose();
+  }
+
+  Future<void> _createProject() async {
+    final name = TextEditingController();
+    final instructions = TextEditingController();
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('New project'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: instructions,
+                minLines: 3,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Instructions',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              (name.text.trim(), instructions.text.trim()),
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    name.dispose();
+    instructions.dispose();
+    if (result == null || result.$1.isEmpty) {
+      return;
+    }
+    final project = await controller.createProject(
+      name: result.$1,
+      instructions: result.$2,
+    );
+    if (project != null) {
+      await controller.openProject(project);
+    }
+  }
+
+  Future<void> _showProjectSettings(BuildContext context) async {
+    final project = controller.activeProject;
+    if (project == null) {
+      return;
+    }
+    await controller.loadActiveProjectFiles(silent: true);
+    if (!mounted) {
+      return;
+    }
+    final instructions = TextEditingController(text: project.instructions ?? '');
+    final action = await showDialog<_ProjectDialogAction>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(project.name),
+        content: SizedBox(
+          width: 600,
+          height: 500,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              TextField(
+                controller: instructions,
+                minLines: 3,
+                maxLines: 8,
+                decoration: const InputDecoration(
+                  labelText: 'Project instructions',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text('Files', style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 6),
+              Expanded(
+                child: controller.activeProjectFiles.isEmpty
+                    ? const Center(child: Text('No project files'))
+                    : ListView.builder(
+                        itemCount: controller.activeProjectFiles.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          final file = controller.activeProjectFiles[index];
+                          return ListTile(
+                            leading: const Icon(Icons.insert_drive_file_outlined),
+                            title: Text(file.name),
+                            subtitle: file.mimeType == null ? null : Text(file.mimeType!),
+                            trailing: IconButton(
+                              tooltip: 'Download',
+                              onPressed: () => _saveProjectFile(project, file),
+                              icon: const Icon(Icons.download_outlined),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, _ProjectDialogAction.delete),
+            child: const Text('Delete project'),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, _ProjectDialogAction.save),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (action == _ProjectDialogAction.save) {
+      await controller.updateActiveProjectInstructions(instructions.text);
+    } else if (action == _ProjectDialogAction.delete) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Delete project?'),
+          content: const Text('This deletes the project in ChatGPT.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        await controller.deleteActiveProject();
+      }
+    }
+    instructions.dispose();
+  }
+
+  Future<void> _saveProjectFile(ProjectSummary project, ProjectFile file) async {
+    try {
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save project file',
+        fileName: _safeFileName(file.name),
+      );
+      if (path == null || path.isEmpty) {
+        return;
+      }
+      final bytes = await controller.actions.projectFileBytes(project.id, file.id);
+      await File(path).writeAsBytes(bytes, flush: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Project file saved')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save project file: $error')),
+        );
+      }
     }
   }
 
@@ -584,6 +947,13 @@ class _ChatHomeState extends State<ChatHome> {
       await controller.saveSettings(next);
     }
   }
+
+  String _safeFileName(String value) {
+    final clean = value
+        .replaceAll(RegExp(r'[\\/:*?"<>|\u0000-\u001f]'), '_')
+        .trim();
+    return clean.isEmpty ? 'file' : clean;
+  }
 }
 
 class _InteractiveActions extends StatelessWidget {
@@ -630,10 +1000,17 @@ class _ComposerControls extends StatelessWidget {
             reasoningItems.contains(controller.selectedReasoningLevel)
         ? controller.selectedReasoningLevel!
         : 'auto';
-    final models = controller.models.isEmpty ? const <String>['auto'] : controller.models;
+    final models = controller.models.isEmpty
+        ? const <String>['auto']
+        : controller.models;
     final selectedModel = models.contains(controller.selectedModel)
         ? controller.selectedModel
         : models.first;
+    final apps = <String>['none', ...controller.appLabels];
+    final selectedApp = controller.selectedApp != null &&
+            apps.contains(controller.selectedApp)
+        ? controller.selectedApp!
+        : 'none';
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -665,6 +1042,16 @@ class _ComposerControls extends StatelessWidget {
             label: _modeLabel,
             onChanged: controller.sending ? null : controller.setMode,
           ),
+          if (controller.appLabels.isNotEmpty) ...<Widget>[
+            const SizedBox(width: 6),
+            _CompactDropdown(
+              tooltip: 'App',
+              value: selectedApp,
+              values: apps,
+              label: (String value) => value == 'none' ? 'Apps' : value,
+              onChanged: controller.sending ? null : controller.setApp,
+            ),
+          ],
           if (controller.activeConversation == null &&
               controller.activeProject == null &&
               controller.activeGpt == null) ...<Widget>[
@@ -756,10 +1143,15 @@ class _CompactDropdown extends StatelessWidget {
 }
 
 class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.controller, required this.searchController});
+  const _Sidebar({
+    required this.controller,
+    required this.searchController,
+    required this.onCreateProject,
+  });
 
   final ChatController controller;
   final TextEditingController searchController;
+  final VoidCallback onCreateProject;
 
   @override
   Widget build(BuildContext context) {
@@ -807,11 +1199,15 @@ class _Sidebar extends StatelessWidget {
                 _closeDrawer(context);
               },
               icon: const Icon(Icons.edit_outlined, size: 18),
-              label: Text(controller.activeProject != null ? 'New project chat' : 'New chat'),
+              label: Text(
+                controller.activeProject != null ? 'New project chat' : 'New chat',
+              ),
             ),
           ),
         ),
-        if (controller.sidebarSection != SidebarSection.gpts)
+        if (controller.sidebarSection != SidebarSection.gpts &&
+            !(controller.sidebarSection == SidebarSection.projects &&
+                controller.activeProject == null))
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: TextField(
@@ -831,7 +1227,9 @@ class _Sidebar extends StatelessWidget {
                         icon: const Icon(Icons.close, size: 18),
                       ),
                 isDense: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onSubmitted: controller.search,
             ),
@@ -864,7 +1262,8 @@ class _Sidebar extends StatelessWidget {
   }
 
   Widget _conversationList(BuildContext context) {
-    if (controller.conversations.isEmpty) {
+    final items = controller.displayedConversations;
+    if (items.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(20),
@@ -874,15 +1273,17 @@ class _Sidebar extends StatelessWidget {
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      itemCount: controller.conversations.length,
+      itemCount: items.length,
       itemBuilder: (BuildContext context, int index) {
-        final item = controller.conversations[index];
+        final item = items[index];
         final selected = item.id == controller.activeConversation?.id;
+        final pinned = controller.pinnedConversationIds.contains(item.id);
         return ListTile(
           dense: true,
           selected: selected,
           selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          leading: pinned ? const Icon(Icons.push_pin, size: 15) : null,
           title: Text(
             item.title,
             maxLines: 2,
@@ -898,24 +1299,44 @@ class _Sidebar extends StatelessWidget {
   }
 
   Widget _projectList(BuildContext context) {
-    if (controller.projects.isEmpty) {
-      return const Center(child: Text('No projects'));
-    }
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      itemCount: controller.projects.length,
-      itemBuilder: (BuildContext context, int index) {
-        final item = controller.projects[index];
-        return ListTile(
-          dense: true,
-          leading: const Icon(Icons.folder_outlined, size: 19),
-          title: Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-          onTap: () {
-            controller.openProject(item);
-            _closeDrawer(context);
-          },
-        );
-      },
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onCreateProject,
+              icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+              label: const Text('New project'),
+            ),
+          ),
+        ),
+        Expanded(
+          child: controller.projects.isEmpty
+              ? const Center(child: Text('No projects'))
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  itemCount: controller.projects.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final item = controller.projects[index];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.folder_outlined, size: 19),
+                      title: Text(
+                        item.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () {
+                        controller.openProject(item);
+                        _closeDrawer(context);
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -934,7 +1355,11 @@ class _Sidebar extends StatelessWidget {
           title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: item.description == null
               ? null
-              : Text(item.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+              : Text(
+                  item.description!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
           onTap: () {
             controller.openGpt(item);
             _closeDrawer(context);
@@ -954,4 +1379,6 @@ class _Sidebar extends StatelessWidget {
 
 enum _AttachmentAction { upload, library }
 
-enum _ConversationMenuAction { rename, archive, delete }
+enum _ConversationMenuAction { rename, pin, share, archive, delete }
+
+enum _ProjectDialogAction { save, delete }
