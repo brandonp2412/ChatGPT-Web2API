@@ -1,11 +1,11 @@
-"""ChatGPT-Web2API — OpenAI-compatible proxy via CDP.
+"""Sloppa-Backend — subscription-backed ChatGPT bridge via CDP.
 
 Usage:
-    chatgpt-web2api                          # all defaults
-    chatgpt-web2api --config config.json     # from config file
-    chatgpt-web2api --port 9090              # override port
-    chatgpt-web2api --cdp-port 9333          # override CDP port
-    chatgpt-web2api --headless               # headless Chrome
+    sloppa-backend                          # all defaults
+    sloppa-backend --config config.json     # from config file
+    sloppa-backend --port 9090              # override port
+    sloppa-backend --cdp-port 9333          # override CDP port
+    sloppa-backend --headless               # headless Chrome
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def inject_cookies(args) -> None:
             targets = json.loads(resp.read())
     except Exception:
         print(f"Error: Chrome not running on CDP port {config.chrome.cdp_port}")
-        print("Start Chrome first: chatgpt-web2api")
+        print("Start Chrome first: sloppa-backend")
         sys.exit(1)
 
     async def _inject():
@@ -141,13 +141,13 @@ def main() -> None:
     has_subcommand = len(sys.argv) > 1 and sys.argv[1] in subcommands
 
     parser = argparse.ArgumentParser(
-        prog="chatgpt-web2api",
-        description="OpenAI-compatible API proxy through ChatGPT web via CDP",
+        prog="sloppa-backend",
+        description="Sloppa-Backend subscription-backed ChatGPT bridge via CDP",
     )
 
     if has_subcommand:
         subparsers = parser.add_subparsers(dest="command")
-        start_parser = subparsers.add_parser("start", help="Start the proxy (default)")
+        start_parser = subparsers.add_parser("start", help="Start the bridge (default)")
         _add_common_args(start_parser)
         cookie_parser = subparsers.add_parser(
             "inject-cookies", help="Inject browser cookies for auth"
