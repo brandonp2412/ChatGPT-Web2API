@@ -66,7 +66,7 @@ jobs:
           cache: true
       - name: Generate Android runner
         working-directory: client
-        run: flutter create --platforms=android --project-name chatgpt_bridge_client .
+        run: flutter create --platforms=android --project-name sloppa .
       - name: Require microphone and network permissions
         working-directory: client
         shell: bash
@@ -115,5 +115,5 @@ jobs:
       - name: Check package
         run: |
           pip install dist/*.whl
-          chatgpt-web2api --help
-          chatgpt-web2api-mcp --help
+          sloppa-backend --help
+          sloppa-backend-mcp --help
