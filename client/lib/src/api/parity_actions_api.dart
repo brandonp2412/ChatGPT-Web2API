@@ -21,11 +21,12 @@ class ParityActionsApi {
       };
 
   Uri _uri(String path, [Map<String, String>? query]) {
-    final base = settings.baseUri;
-    return base.replace(
-      path: '${base.path}$path'.replaceAll('//', '/'),
-      queryParameters: query,
-    );
+    final root = BridgeSettings.normalizedBaseUrl(settings.baseUrl);
+    final suffix = path.startsWith('/') ? path : '/$path';
+    final uri = Uri.parse('$root$suffix');
+    return query == null || query.isEmpty
+        ? uri
+        : uri.replace(queryParameters: query);
   }
 
   Future<ChatConversation> blockAction({
