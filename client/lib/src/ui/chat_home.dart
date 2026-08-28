@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/bridge_client.dart';
+import '../model/account_models.dart';
 import '../model/chat_models.dart';
 import '../state/chat_controller.dart';
 import 'message_view.dart';
@@ -38,9 +40,7 @@ class _ChatHomeState extends State<ChatHome> {
       animation: controller,
       builder: (BuildContext context, Widget? child) {
         if (!controller.initialized) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
         if (controller.sending) {
           WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -55,14 +55,18 @@ class _ChatHomeState extends State<ChatHome> {
             return Scaffold(
               drawer: wide ? null : Drawer(child: SafeArea(child: sidebar)),
               appBar: AppBar(
-                title: Text(controller.activeConversation?.title ?? 'New chat'),
+                title: Text(_pageTitle()),
                 actions: <Widget>[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Tooltip(
-                      message: controller.connected ? 'Bridge connected' : 'Bridge disconnected',
+                      message: controller.connected
+                          ? 'Bridge connected'
+                          : 'Bridge disconnected',
                       child: Icon(
-                        controller.connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
+                        controller.connected
+                            ? Icons.cloud_done_outlined
+                            : Icons.cloud_off_outlined,
                         size: 20,
                       ),
                     ),
@@ -78,6 +82,37 @@ class _ChatHomeState extends State<ChatHome> {
                           )
                         : const Icon(Icons.refresh),
                   ),
+                  if (controller.activeConversation != null)
+                    PopupMenuButton<_ConversationMenuAction>(
+                      tooltip: 'Chat actions',
+                      onSelected: _handleConversationMenu,
+                      itemBuilder: (BuildContext context) => const <PopupMenuEntry<_ConversationMenuAction>>[
+                        PopupMenuItem(
+                          value: _ConversationMenuAction.rename,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.edit_outlined),
+                            title: Text('Rename'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _ConversationMenuAction.archive,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.archive_outlined),
+                            title: Text('Archive'),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: _ConversationMenuAction.delete,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.delete_outline),
+                            title: Text('Delete'),
+                          ),
+                        ),
+                      ],
+                    ),
                   IconButton(
                     tooltip: 'Settings',
                     onPressed: () => _showSettings(context),
@@ -109,6 +144,20 @@ class _ChatHomeState extends State<ChatHome> {
     );
   }
 
+  String _pageTitle() {
+    final active = controller.activeConversation;
+    if (active != null) {
+      return active.title;
+    }
+    if (controller.activeProject != null) {
+      return controller.activeProject!.name;
+    }
+    if (controller.activeGpt != null) {
+      return controller.activeGpt!.name;
+    }
+    return controller.temporaryChat ? 'Temporary Chat' : 'New chat';
+  }
+
   Widget _conversationPane(BuildContext context) {
     final error = controller.errorMessage;
     return Column(
@@ -124,6 +173,8 @@ class _ChatHomeState extends State<ChatHome> {
             ],
           ),
         _ComposerControls(controller: controller),
+        if (controller.interactiveActions.isNotEmpty)
+          _InteractiveActions(controller: controller),
         const Divider(height: 1),
         Expanded(
           child: controller.loadingConversation
@@ -141,11 +192,16 @@ class _ChatHomeState extends State<ChatHome> {
     final reports = controller.activeConversation?.researchReports ?? const <ResearchReport>[];
     final total = messageCount + reports.length;
     if (total == 0) {
-      return const Center(
+      final contextLabel = controller.activeProject != null
+          ? ' in ${controller.activeProject!.name}'
+          : controller.activeGpt != null
+              ? ' with ${controller.activeGpt!.name}'
+              : '';
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
+          padding: const EdgeInsets.all(32),
           child: Text(
-            'Start a chat. The app uses your logged-in ChatGPT subscription through your bridge.',
+            'Start a chat$contextLabel. Your ChatGPT subscription stays on the bridge.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -163,6 +219,9 @@ class _ChatHomeState extends State<ChatHome> {
             message: message,
             conversation: controller.activeConversation,
             onSelectBranch: controller.selectBranch,
+            onRegenerate: controller.regenerate,
+            onEdit: controller.editMessage,
+            onBranchInNewChat: controller.branchInNewChat,
           );
         }
         final report = reports[index - messageCount];
@@ -172,7 +231,8 @@ class _ChatHomeState extends State<ChatHome> {
   }
 
   Widget _pendingAttachments() {
-    if (controller.pendingAttachments.isEmpty) {
+    if (controller.pendingAttachments.isEmpty &&
+        controller.pendingLibraryFiles.isEmpty) {
       return const SizedBox.shrink();
     }
     return SizedBox(
@@ -182,15 +242,26 @@ class _ChatHomeState extends State<ChatHome> {
         child: Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: controller.pendingAttachments.map((UploadedAttachment item) {
-            return InputChip(
-              avatar: const Icon(Icons.attach_file, size: 16),
-              label: Text(item.name),
-              onDeleted: controller.sending
-                  ? null
-                  : () => controller.removePendingAttachment(item.id),
-            );
-          }).toList(growable: false),
+          children: <Widget>[
+            ...controller.pendingAttachments.map((UploadedAttachment item) {
+              return InputChip(
+                avatar: const Icon(Icons.attach_file, size: 16),
+                label: Text(item.name),
+                onDeleted: controller.sending
+                    ? null
+                    : () => controller.removePendingAttachment(item.id),
+              );
+            }),
+            ...controller.pendingLibraryFiles.map((String name) {
+              return InputChip(
+                avatar: const Icon(Icons.folder_copy_outlined, size: 16),
+                label: Text(name),
+                onDeleted: controller.sending
+                    ? null
+                    : () => controller.removeLibraryFile(name),
+              );
+            }),
+          ],
         ),
       ),
     );
@@ -214,9 +285,34 @@ class _ChatHomeState extends State<ChatHome> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
-                  IconButton(
-                    tooltip: 'Attach file',
-                    onPressed: controller.sending ? null : _pickFiles,
+                  PopupMenuButton<_AttachmentAction>(
+                    tooltip: 'Add',
+                    enabled: !controller.sending,
+                    onSelected: (action) {
+                      if (action == _AttachmentAction.upload) {
+                        _pickFiles();
+                      } else {
+                        _pickLibraryFiles();
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => const <PopupMenuEntry<_AttachmentAction>>[
+                      PopupMenuItem(
+                        value: _AttachmentAction.upload,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.upload_file_outlined),
+                          title: Text('Upload files'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: _AttachmentAction.library,
+                        child: ListTile(
+                          dense: true,
+                          leading: Icon(Icons.folder_copy_outlined),
+                          title: Text('Add from Library'),
+                        ),
+                      ),
+                    ],
                     icon: const Icon(Icons.add),
                   ),
                   Expanded(
@@ -275,9 +371,68 @@ class _ChatHomeState extends State<ChatHome> {
     }
   }
 
+  Future<void> _pickLibraryFiles() async {
+    final items = await controller.loadLibrary();
+    if (!mounted || items.isEmpty) {
+      return;
+    }
+    final selected = <String>{...controller.pendingLibraryFiles};
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Add from Library'),
+              content: SizedBox(
+                width: 520,
+                height: 420,
+                child: ListView.builder(
+                  itemCount: items.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final item = items[index];
+                    return CheckboxListTile(
+                      value: selected.contains(item.name),
+                      title: Text(item.name),
+                      subtitle: item.detail == null ? null : Text(item.detail!),
+                      onChanged: (bool? value) {
+                        setDialogState(() {
+                          if (value == true) {
+                            selected.add(item.name);
+                          } else {
+                            selected.remove(item.name);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (result != null) {
+      controller.addLibraryFiles(result);
+    }
+  }
+
   void _submit() {
     final text = _composer.text;
-    if (text.trim().isEmpty && controller.pendingAttachments.isEmpty) {
+    if (text.trim().isEmpty &&
+        controller.pendingAttachments.isEmpty &&
+        controller.pendingLibraryFiles.isEmpty) {
       return;
     }
     _composer.clear();
@@ -294,6 +449,69 @@ class _ChatHomeState extends State<ChatHome> {
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
     );
+  }
+
+  Future<void> _handleConversationMenu(_ConversationMenuAction action) async {
+    if (action == _ConversationMenuAction.rename) {
+      final active = controller.activeConversation;
+      if (active == null) {
+        return;
+      }
+      final text = TextEditingController(text: active.title);
+      final result = await showDialog<String>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Rename chat'),
+          content: TextField(controller: text, autofocus: true),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, text.text),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      text.dispose();
+      if (result != null) {
+        await controller.renameActiveConversation(result);
+      }
+      return;
+    }
+
+    final destructive = action == _ConversationMenuAction.delete;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: Text(destructive ? 'Delete chat?' : 'Archive chat?'),
+        content: Text(
+          destructive
+              ? 'This removes the conversation from ChatGPT.'
+              : 'This archives the conversation in ChatGPT.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(destructive ? 'Delete' : 'Archive'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    if (destructive) {
+      await controller.deleteActiveConversation();
+    } else {
+      await controller.archiveActiveConversation();
+    }
   }
 
   Future<void> _showSettings(BuildContext context) async {
@@ -368,6 +586,34 @@ class _ChatHomeState extends State<ChatHome> {
   }
 }
 
+class _InteractiveActions extends StatelessWidget {
+  const _InteractiveActions({required this.controller});
+
+  final ChatController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: controller.interactiveActions
+              .map(
+                (InteractiveAction action) => ActionChip(
+                  label: Text(action.label),
+                  onPressed: () => controller.triggerInteractiveAction(action),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ),
+    );
+  }
+}
+
 class _ComposerControls extends StatelessWidget {
   const _ComposerControls({required this.controller});
 
@@ -419,6 +665,16 @@ class _ComposerControls extends StatelessWidget {
             label: _modeLabel,
             onChanged: controller.sending ? null : controller.setMode,
           ),
+          if (controller.activeConversation == null &&
+              controller.activeProject == null &&
+              controller.activeGpt == null) ...<Widget>[
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('Temporary'),
+              selected: controller.temporaryChat,
+              onSelected: controller.sending ? null : controller.setTemporaryChat,
+            ),
+          ],
         ],
       ),
     );
@@ -510,80 +766,192 @@ class _Sidebar extends StatelessWidget {
     return Column(
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+          child: SegmentedButton<SidebarSection>(
+            showSelectedIcon: false,
+            segments: const <ButtonSegment<SidebarSection>>[
+              ButtonSegment(
+                value: SidebarSection.chats,
+                icon: Icon(Icons.chat_bubble_outline, size: 17),
+                tooltip: 'Chats',
+              ),
+              ButtonSegment(
+                value: SidebarSection.projects,
+                icon: Icon(Icons.folder_outlined, size: 17),
+                tooltip: 'Projects',
+              ),
+              ButtonSegment(
+                value: SidebarSection.gpts,
+                icon: Icon(Icons.explore_outlined, size: 17),
+                tooltip: 'GPTs',
+              ),
+            ],
+            selected: <SidebarSection>{controller.sidebarSection},
+            onSelectionChanged: (Set<SidebarSection> selection) {
+              if (selection.isNotEmpty) {
+                searchController.clear();
+                controller.setSidebarSection(selection.first);
+              }
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.tonalIcon(
               onPressed: () {
-                controller.newChat();
-                if (Scaffold.maybeOf(context)?.isDrawerOpen == true) {
-                  Navigator.pop(context);
-                }
+                final keepContext = controller.activeProject != null &&
+                    controller.sidebarSection == SidebarSection.projects;
+                controller.newChat(keepContext: keepContext);
+                _closeDrawer(context);
               },
               icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('New chat'),
+              label: Text(controller.activeProject != null ? 'New project chat' : 'New chat'),
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: TextField(
-            controller: searchController,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Search chats',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              suffixIcon: controller.searchQuery.isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Clear search',
-                      onPressed: () {
-                        searchController.clear();
-                        controller.search('');
-                      },
-                      icon: const Icon(Icons.close, size: 18),
-                    ),
-              isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-            ),
-            onSubmitted: controller.search,
-          ),
-        ),
-        Expanded(
-          child: controller.conversations.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('No chats loaded', textAlign: TextAlign.center),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  itemCount: controller.conversations.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final item = controller.conversations[index];
-                    final selected = item.id == controller.activeConversation?.id;
-                    return ListTile(
-                      dense: true,
-                      selected: selected,
-                      selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      title: Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+        if (controller.sidebarSection != SidebarSection.gpts)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: TextField(
+              controller: searchController,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search chats',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: controller.searchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          searchController.clear();
+                          controller.search('');
+                        },
+                        icon: const Icon(Icons.close, size: 18),
                       ),
-                      onTap: () {
-                        controller.selectConversation(item.id);
-                        if (Scaffold.maybeOf(context)?.isDrawerOpen == true) {
-                          Navigator.pop(context);
-                        }
-                      },
-                    );
-                  },
-                ),
-        ),
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onSubmitted: controller.search,
+            ),
+          ),
+        if (controller.activeProject != null &&
+            controller.sidebarSection == SidebarSection.projects)
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.arrow_back, size: 19),
+            title: Text(controller.activeProject!.name),
+            onTap: () => controller.setSidebarSection(SidebarSection.projects),
+          ),
+        Expanded(child: _sidebarBody(context)),
       ],
     );
   }
+
+  Widget _sidebarBody(BuildContext context) {
+    if (controller.loadingNavigation) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (controller.sidebarSection == SidebarSection.projects &&
+        controller.activeProject == null) {
+      return _projectList(context);
+    }
+    if (controller.sidebarSection == SidebarSection.gpts) {
+      return _gptList(context);
+    }
+    return _conversationList(context);
+  }
+
+  Widget _conversationList(BuildContext context) {
+    if (controller.conversations.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: Text('No chats loaded', textAlign: TextAlign.center),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      itemCount: controller.conversations.length,
+      itemBuilder: (BuildContext context, int index) {
+        final item = controller.conversations[index];
+        final selected = item.id == controller.activeConversation?.id;
+        return ListTile(
+          dense: true,
+          selected: selected,
+          selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          title: Text(
+            item.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () {
+            controller.selectConversation(item.id);
+            _closeDrawer(context);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _projectList(BuildContext context) {
+    if (controller.projects.isEmpty) {
+      return const Center(child: Text('No projects'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      itemCount: controller.projects.length,
+      itemBuilder: (BuildContext context, int index) {
+        final item = controller.projects[index];
+        return ListTile(
+          dense: true,
+          leading: const Icon(Icons.folder_outlined, size: 19),
+          title: Text(item.name, maxLines: 2, overflow: TextOverflow.ellipsis),
+          onTap: () {
+            controller.openProject(item);
+            _closeDrawer(context);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _gptList(BuildContext context) {
+    if (controller.gpts.isEmpty) {
+      return const Center(child: Text('No GPTs'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      itemCount: controller.gpts.length,
+      itemBuilder: (BuildContext context, int index) {
+        final item = controller.gpts[index];
+        return ListTile(
+          dense: true,
+          leading: const Icon(Icons.auto_awesome_outlined, size: 19),
+          title: Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: item.description == null
+              ? null
+              : Text(item.description!, maxLines: 2, overflow: TextOverflow.ellipsis),
+          onTap: () {
+            controller.openGpt(item);
+            _closeDrawer(context);
+          },
+        );
+      },
+    );
+  }
+
+  void _closeDrawer(BuildContext context) {
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold?.isDrawerOpen == true) {
+      Navigator.pop(context);
+    }
+  }
 }
+
+enum _AttachmentAction { upload, library }
+
+enum _ConversationMenuAction { rename, archive, delete }
