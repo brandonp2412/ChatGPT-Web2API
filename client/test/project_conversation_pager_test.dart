@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:chatgpt_bridge_client/src/api/bridge_client.dart';
-import 'package:chatgpt_bridge_client/src/api/project_conversation_pager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:sloppa/src/api/bridge_client.dart';
+import 'package:sloppa/src/api/project_conversation_pager.dart';
 
 void main() {
   test('project pager follows cursors and keeps bridge auth on bridge requests', () async {
