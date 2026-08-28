@@ -16,7 +16,7 @@ flutter analyze
 flutter test
 ```
 
-CI is the authoritative Android compile gate: it performs the bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs formatting, analysis and tests, then builds a debug APK. This validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
+CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs formatting, analysis and tests, then builds a debug APK. This validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
 
 For a generated Android runner, ensure `android/app/src/main/AndroidManifest.xml` contains:
 
