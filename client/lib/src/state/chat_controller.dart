@@ -4,8 +4,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../api/bridge_client.dart';
+import '../model/account_models.dart';
 import '../model/chat_models.dart';
 import '../storage/secure_store.dart';
+
+enum SidebarSection { chats, projects, gpts }
 
 class ChatController extends ChangeNotifier {
   ChatController({required SecureStore store}) : _store = store;
@@ -18,12 +21,20 @@ class ChatController extends ChangeNotifier {
     baseUrl: 'http://127.0.0.1:8080',
   );
   List<ConversationSummary> conversations = const <ConversationSummary>[];
+  List<ProjectSummary> projects = const <ProjectSummary>[];
+  List<GptSummary> gpts = const <GptSummary>[];
+  List<LibraryItem> libraryItems = const <LibraryItem>[];
+  List<InteractiveAction> interactiveActions = const <InteractiveAction>[];
   ChatConversation? activeConversation;
+  ProjectSummary? activeProject;
+  GptSummary? activeGpt;
   List<String> models = const <String>['auto'];
   List<String> reasoningLevels = const <String>[];
   List<String> toolLabels = const <String>[];
   List<UploadedAttachment> pendingAttachments = const <UploadedAttachment>[];
+  List<String> pendingLibraryFiles = const <String>[];
 
+  SidebarSection sidebarSection = SidebarSection.chats;
   String selectedModel = 'auto';
   String? selectedReasoningLevel;
   String selectedMode = 'normal';
@@ -31,9 +42,12 @@ class ChatController extends ChangeNotifier {
   String streamingText = '';
   ChatMessage? optimisticUserMessage;
   String? errorMessage;
+  bool temporaryChat = false;
   bool initialized = false;
   bool connecting = false;
   bool loadingConversation = false;
+  bool loadingNavigation = false;
+  bool loadingLibrary = false;
   bool sending = false;
   bool connected = false;
 
@@ -129,6 +143,7 @@ class ChatController extends ChangeNotifier {
       await Future.wait<void>(<Future<void>>[
         refreshConversations(),
         _loadComposerOptions(),
+        _loadNavigation(),
       ]);
       final active = activeConversation;
       if (active != null && active.id.isNotEmpty) {
@@ -147,9 +162,14 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> refreshConversations() async {
-    final items = searchQuery.trim().isEmpty
-        ? await client.conversations(limit: 80)
-        : await client.searchConversations(searchQuery.trim());
+    List<ConversationSummary> items;
+    if (searchQuery.trim().isNotEmpty) {
+      items = await client.searchConversations(searchQuery.trim());
+    } else if (activeProject != null) {
+      items = await client.projectConversations(activeProject!.id);
+    } else {
+      items = await client.conversations(limit: 80);
+    }
     conversations = items;
     await _persistCache();
     notifyListeners();
@@ -165,12 +185,78 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  Future<void> newChat() async {
+  Future<void> setSidebarSection(SidebarSection section) async {
+    sidebarSection = section;
+    searchQuery = '';
+    loadingNavigation = true;
+    notifyListeners();
+    try {
+      if (section == SidebarSection.chats) {
+        activeProject = null;
+        activeGpt = null;
+        conversations = await client.conversations(limit: 80);
+      } else if (section == SidebarSection.projects) {
+        projects = await client.projects();
+      } else {
+        gpts = await client.gpts();
+      }
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      loadingNavigation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openProject(ProjectSummary project) async {
+    await _stopBackgroundEvents();
+    activeProject = project;
+    activeGpt = null;
+    activeConversation = null;
+    temporaryChat = false;
+    sidebarSection = SidebarSection.projects;
+    loadingNavigation = true;
+    notifyListeners();
+    try {
+      conversations = await client.projectConversations(project.id);
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      loadingNavigation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> openGpt(GptSummary gpt) async {
+    await _stopBackgroundEvents();
+    activeGpt = gpt;
+    activeProject = null;
+    activeConversation = null;
+    temporaryChat = false;
+    sidebarSection = SidebarSection.gpts;
+    conversations = const <ConversationSummary>[];
+    errorMessage = null;
+    notifyListeners();
+    await _persistCache();
+  }
+
+  Future<void> newChat({bool keepContext = false}) async {
     await _stopBackgroundEvents();
     activeConversation = null;
     optimisticUserMessage = null;
     streamingText = '';
     pendingAttachments = const <UploadedAttachment>[];
+    pendingLibraryFiles = const <String>[];
+    temporaryChat = false;
+    if (!keepContext) {
+      activeProject = null;
+      activeGpt = null;
+      sidebarSection = SidebarSection.chats;
+      conversations = await client.conversations(limit: 80).catchError(
+            (Object _) => conversations,
+          );
+    }
     errorMessage = null;
     notifyListeners();
     await _persistCache();
@@ -191,14 +277,62 @@ class ChatController extends ChangeNotifier {
     }
     try {
       activeConversation = await client.conversation(id);
+      temporaryChat = false;
       optimisticUserMessage = null;
       streamingText = '';
       await _persistCache();
       _startBackgroundEvents(id);
+      await refreshInteractiveActions();
     } on Object catch (error) {
       errorMessage = _message(error);
     } finally {
       loadingConversation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> renameActiveConversation(String title) async {
+    final active = activeConversation;
+    final clean = title.trim();
+    if (active == null || clean.isEmpty || sending) {
+      return;
+    }
+    try {
+      activeConversation = await client.renameConversation(active.id, clean);
+      await refreshConversations();
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      notifyListeners();
+    }
+  }
+
+  Future<void> archiveActiveConversation() async {
+    final active = activeConversation;
+    if (active == null || sending) {
+      return;
+    }
+    try {
+      await client.archiveConversation(active.id, true);
+      await newChat(keepContext: activeProject != null || activeGpt != null);
+      await refreshConversations();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteActiveConversation() async {
+    final active = activeConversation;
+    if (active == null || sending) {
+      return;
+    }
+    try {
+      await client.deleteConversation(active.id);
+      await newChat(keepContext: activeProject != null || activeGpt != null);
+      await refreshConversations();
+    } on Object catch (error) {
+      errorMessage = _message(error);
       notifyListeners();
     }
   }
@@ -225,15 +359,48 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<LibraryItem>> loadLibrary() async {
+    loadingLibrary = true;
+    notifyListeners();
+    try {
+      libraryItems = await client.library();
+      return libraryItems;
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      return const <LibraryItem>[];
+    } finally {
+      loadingLibrary = false;
+      notifyListeners();
+    }
+  }
+
+  void addLibraryFiles(Iterable<String> names) {
+    pendingLibraryFiles = <String>{...pendingLibraryFiles, ...names}
+        .where((String item) => item.trim().isNotEmpty)
+        .toList(growable: false);
+    notifyListeners();
+  }
+
+  void removeLibraryFile(String name) {
+    pendingLibraryFiles = pendingLibraryFiles
+        .where((String item) => item != name)
+        .toList(growable: false);
+    notifyListeners();
+  }
+
   Future<void> send(String prompt) async {
     final text = prompt.trim();
-    if (sending || (text.isEmpty && pendingAttachments.isEmpty)) {
+    if (sending ||
+        (text.isEmpty &&
+            pendingAttachments.isEmpty &&
+            pendingLibraryFiles.isEmpty)) {
       return;
     }
     await _stopBackgroundEvents();
     sending = true;
     errorMessage = null;
     streamingText = '';
+    interactiveActions = const <InteractiveAction>[];
     optimisticUserMessage = text.isEmpty
         ? null
         : ChatMessage(
@@ -244,7 +411,9 @@ class ChatController extends ChangeNotifier {
     final attachmentIds = pendingAttachments
         .map((UploadedAttachment item) => item.id)
         .toList(growable: false);
+    final libraryFiles = List<String>.of(pendingLibraryFiles, growable: false);
     pendingAttachments = const <UploadedAttachment>[];
+    pendingLibraryFiles = const <String>[];
     notifyListeners();
 
     String? completedConversationId;
@@ -255,7 +424,11 @@ class ChatController extends ChangeNotifier {
         model: selectedModel,
         reasoningLevel: selectedReasoningLevel,
         mode: selectedMode,
+        projectId: activeProject?.id,
+        gizmoId: activeGpt?.id,
+        temporary: temporaryChat,
         attachmentIds: attachmentIds,
+        libraryFiles: libraryFiles,
       )) {
         if (event.type == 'response.error') {
           throw BridgeException(
@@ -267,6 +440,9 @@ class ChatController extends ChangeNotifier {
         final delta = event.delta;
         if (delta.isNotEmpty) {
           streamingText += delta;
+        }
+        if (event.type == 'ui.actions' && event.data['actions'] is List) {
+          interactiveActions = _parseInteractiveActions(event.data['actions']);
         }
         final snapshot = event.conversation;
         if (snapshot != null) {
@@ -290,10 +466,12 @@ class ChatController extends ChangeNotifier {
       }
       optimisticUserMessage = null;
       streamingText = '';
+      temporaryChat = false;
       await refreshConversations();
       final id = activeConversation?.id ?? completedConversationId;
       if (id != null && id.isNotEmpty) {
         _startBackgroundEvents(id);
+        await refreshInteractiveActions();
       }
       await _persistCache();
     } on Object catch (error) {
@@ -337,6 +515,111 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  Future<void> regenerate(ChatMessage message) async {
+    final active = activeConversation;
+    if (active == null || sending || message.role != 'assistant') {
+      return;
+    }
+    loadingConversation = true;
+    notifyListeners();
+    try {
+      activeConversation = await client.messageAction(
+        conversationId: active.id,
+        action: 'regenerate',
+        messageId: message.id,
+      );
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      loadingConversation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> editMessage(ChatMessage message, String replacement) async {
+    final active = activeConversation;
+    final clean = replacement.trim();
+    if (active == null || sending || message.role != 'user' || clean.isEmpty) {
+      return;
+    }
+    loadingConversation = true;
+    notifyListeners();
+    try {
+      activeConversation = await client.messageAction(
+        conversationId: active.id,
+        action: 'edit',
+        messageId: message.id,
+        text: clean,
+      );
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      loadingConversation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> branchInNewChat(ChatMessage message) async {
+    final active = activeConversation;
+    if (active == null || sending) {
+      return;
+    }
+    loadingConversation = true;
+    notifyListeners();
+    try {
+      activeConversation = await client.messageAction(
+        conversationId: active.id,
+        action: 'branch',
+        messageId: message.id,
+      );
+      activeProject = null;
+      activeGpt = null;
+      sidebarSection = SidebarSection.chats;
+      await refreshConversations();
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      loadingConversation = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshInteractiveActions() async {
+    final id = activeConversation?.id;
+    if (id == null || id.isEmpty) {
+      interactiveActions = const <InteractiveAction>[];
+      return;
+    }
+    try {
+      interactiveActions = await client.interactiveActions(conversationId: id);
+      notifyListeners();
+    } on Object {
+      interactiveActions = const <InteractiveAction>[];
+    }
+  }
+
+  Future<void> triggerInteractiveAction(InteractiveAction action) async {
+    final id = activeConversation?.id;
+    if (id == null || id.isEmpty) {
+      return;
+    }
+    try {
+      await client.triggerInteractiveAction(
+        label: action.label,
+        conversationId: id,
+      );
+      interactiveActions = const <InteractiveAction>[];
+      _startBackgroundEvents(id);
+      notifyListeners();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      notifyListeners();
+    }
+  }
+
   void setModel(String value) {
     selectedModel = value;
     notifyListeners();
@@ -355,18 +638,26 @@ class ChatController extends ChangeNotifier {
     unawaited(_persistCache());
   }
 
+  void setTemporaryChat(bool value) {
+    if (activeConversation != null) {
+      return;
+    }
+    temporaryChat = value;
+    notifyListeners();
+  }
+
   Future<void> _loadComposerOptions() async {
-    final results = await Future.wait<Object>(<Future<Object>>[
+    final results = await Future.wait<List<String>>(<Future<List<String>>>[
       client.models(),
       client.reasoningLevels(),
       client.tools(),
     ]);
-    final loadedModels = results[0] as List<String>;
+    final loadedModels = results[0];
     models = loadedModels.isEmpty
         ? const <String>['auto']
         : <String>{'auto', ...loadedModels}.toList(growable: false);
-    reasoningLevels = results[1] as List<String>;
-    toolLabels = results[2] as List<String>;
+    reasoningLevels = results[1];
+    toolLabels = results[2];
     if (!models.contains(selectedModel)) {
       selectedModel = 'auto';
     }
@@ -379,6 +670,26 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadNavigation() async {
+    final results = await Future.wait<Object>(<Future<Object>>[
+      client.projects(),
+      client.gpts(),
+    ]);
+    projects = results[0] as List<ProjectSummary>;
+    gpts = results[1] as List<GptSummary>;
+  }
+
+  List<InteractiveAction> _parseInteractiveActions(dynamic raw) {
+    if (raw is! List) {
+      return const <InteractiveAction>[];
+    }
+    return raw
+        .whereType<Map>()
+        .map((Map item) => InteractiveAction.fromJson(item.cast<String, dynamic>()))
+        .where((InteractiveAction item) => item.label.isNotEmpty)
+        .toList(growable: false);
+  }
+
   void _startBackgroundEvents(String conversationId) {
     unawaited(_stopBackgroundEvents());
     _backgroundSubscription = client.backgroundEvents(conversationId).listen(
@@ -388,6 +699,10 @@ class ChatController extends ChangeNotifier {
           activeConversation = snapshot;
           notifyListeners();
           unawaited(_persistCache());
+        }
+        if (event.type == 'ui.actions' && event.data['actions'] is List) {
+          interactiveActions = _parseInteractiveActions(event.data['actions']);
+          notifyListeners();
         }
       },
       onError: (Object _) {
@@ -438,6 +753,25 @@ class ChatController extends ChangeNotifier {
     if (cachedMode != null && cachedMode.isNotEmpty) {
       selectedMode = cachedMode;
     }
+    final projectId = cache['active_project_id']?.toString();
+    final projectName = cache['active_project_name']?.toString();
+    if (projectId != null && projectId.isNotEmpty) {
+      activeProject = ProjectSummary(
+        id: projectId,
+        name: projectName?.isNotEmpty == true ? projectName! : 'Project',
+      );
+      sidebarSection = SidebarSection.projects;
+    }
+    final gptId = cache['active_gpt_id']?.toString();
+    final gptName = cache['active_gpt_name']?.toString();
+    if (gptId != null && gptId.isNotEmpty) {
+      activeGpt = GptSummary(
+        id: gptId,
+        name: gptName?.isNotEmpty == true ? gptName! : 'GPT',
+      );
+      activeProject = null;
+      sidebarSection = SidebarSection.gpts;
+    }
   }
 
   Future<void> _persistCache() async {
@@ -446,6 +780,10 @@ class ChatController extends ChangeNotifier {
           .map((ConversationSummary item) => item.toJson())
           .toList(growable: false),
       'active_conversation': activeConversation?.toJson(),
+      'active_project_id': activeProject?.id,
+      'active_project_name': activeProject?.name,
+      'active_gpt_id': activeGpt?.id,
+      'active_gpt_name': activeGpt?.name,
       'selected_model': selectedModel,
       'selected_reasoning': selectedReasoningLevel,
       'selected_mode': selectedMode,
