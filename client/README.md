@@ -6,7 +6,7 @@ The app talks only to your own ChatGPT-Web2API server. It never receives or stor
 
 ## Bootstrap
 
-The durable Flutter application source lives here. Platform runners are generated from Flutter's current stable templates rather than vendored stale Gradle/Xcode boilerplate:
+Platform runners are generated from Flutter's current stable templates:
 
 ```bash
 cd client
@@ -16,24 +16,22 @@ flutter analyze
 flutter test
 ```
 
-CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs formatting, analysis and tests, then builds a debug APK. This validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
+CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs formatting, analysis and tests, then builds a debug APK.
 
-For a generated Android runner, ensure `android/app/src/main/AndroidManifest.xml` contains:
+For Android Voice, ensure the generated manifest contains:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 ```
 
-For iOS/macOS Voice, add an appropriate microphone usage description (`NSMicrophoneUsageDescription`) to the generated platform plist before distribution.
+For iOS/macOS Voice, add `NSMicrophoneUsageDescription` before distribution.
 
 ## Connection
 
-For a server on the same device, `http://127.0.0.1:8080` is allowed. Non-loopback bridge URLs must use HTTPS. If the bridge has `api_keys` configured, enter one in Settings; it is sent as a Bearer token to the bridge only. Direct ChatGPT/CDN asset URLs never receive the bridge Bearer token.
+Loopback HTTP (`http://127.0.0.1:8080`) is allowed. Non-loopback bridge URLs must use HTTPS. If the bridge has `api_keys` configured, enter one in Settings; it is sent as a Bearer token to the bridge only. Direct ChatGPT/CDN asset URLs never receive the bridge Bearer token.
 
 ## Current surface
-
-The Flutter client covers the normal consumer ChatGPT Chat workflow exposed by the bridge:
 
 - full paged conversation list and search
 - encrypted offline conversation snapshots
