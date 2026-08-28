@@ -1,11 +1,11 @@
-"""Sloppa-Backend — subscription-backed ChatGPT bridge via CDP.
+"""Sloppa — subscription-backed ChatGPT bridge via CDP.
 
 Usage:
-    sloppa-backend                          # all defaults
-    sloppa-backend --config config.json     # from config file
-    sloppa-backend --port 9090              # override port
-    sloppa-backend --cdp-port 9333          # override CDP port
-    sloppa-backend --headless               # headless Chrome
+    sloppa                          # all defaults
+    sloppa --config config.json     # from config file
+    sloppa --port 9090              # override port
+    sloppa --cdp-port 9333          # override CDP port
+    sloppa --headless               # headless Chrome
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def inject_cookies(args) -> None:
             targets = json.loads(resp.read())
     except Exception:
         print(f"Error: Chrome not running on CDP port {config.chrome.cdp_port}")
-        print("Start Chrome first: sloppa-backend")
+        print("Start Chrome first: sloppa")
         sys.exit(1)
 
     async def _inject():
@@ -141,8 +141,8 @@ def main() -> None:
     has_subcommand = len(sys.argv) > 1 and sys.argv[1] in subcommands
 
     parser = argparse.ArgumentParser(
-        prog="sloppa-backend",
-        description="Sloppa-Backend subscription-backed ChatGPT bridge via CDP",
+        prog="sloppa",
+        description="Sloppa subscription-backed ChatGPT bridge via CDP",
     )
 
     if has_subcommand:
