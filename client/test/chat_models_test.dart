@@ -88,4 +88,85 @@ void main() {
       'https://example.com',
     );
   });
+
+  test('retains block-only generated image messages', () {
+    final conversation = ChatConversation.fromJson(<String, dynamic>{
+      'id': 'conv',
+      'title': 'Image',
+      'messages': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'image-message',
+          'role': 'assistant',
+          'text': '',
+          'blocks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'type': 'image',
+              'asset_pointer': 'sediment://file-123',
+              'mime_type': 'image/png',
+              'name': 'generated.png',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(conversation.messages, hasLength(1));
+    expect(conversation.messages.single.assets, hasLength(1));
+    expect(conversation.messages.single.assets.single.isImage, isTrue);
+    expect(
+      conversation.messages.single.assets.single.pointer,
+      'sediment://file-123',
+    );
+  });
+
+  test('lifts and deduplicates citations from rich blocks', () {
+    final message = ChatMessage.fromJson(<String, dynamic>{
+      'id': 'answer',
+      'role': 'assistant',
+      'text': 'Answer',
+      'citations': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'url': 'https://example.com',
+          'title': 'Example',
+        },
+      ],
+      'blocks': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'type': 'citations',
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'url': 'https://example.com',
+              'title': 'Example',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(message.citations, hasLength(1));
+    expect(message.citations.single.title, 'Example');
+  });
+
+  test('retains code-only messages', () {
+    final conversation = ChatConversation.fromJson(<String, dynamic>{
+      'id': 'conv',
+      'title': 'Code',
+      'messages': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'code-message',
+          'role': 'assistant',
+          'blocks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'type': 'code',
+              'code': 'print("hello")',
+              'language': 'python',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(conversation.messages, hasLength(1));
+    expect(conversation.messages.single.blocks.single['type'], 'code');
+  });
 }
