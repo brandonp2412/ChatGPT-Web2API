@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:chatgpt_bridge_client/src/api/bridge_client.dart';
-import 'package:chatgpt_bridge_client/src/storage/secure_store.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sloppa/src/api/bridge_client.dart';
+import 'package:sloppa/src/storage/secure_store.dart';
 
 class _MemorySecureStore implements SecureKeyValueStore {
   final values = <String, String>{};
@@ -27,7 +27,7 @@ void main() {
   late SecureStore store;
 
   setUp(() async {
-    temp = await Directory.systemTemp.createTemp('chat-cache-test-');
+    temp = await Directory.systemTemp.createTemp('sloppa-cache-test-');
     keys = _MemorySecureStore();
     store = SecureStore(
       secureStorage: keys,
