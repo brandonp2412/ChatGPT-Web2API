@@ -56,18 +56,24 @@ class ChatAsset {
     this.fileName,
     this.mimeType,
     this.url,
+    this.type,
   });
 
   final String? pointer;
   final String? fileName;
   final String? mimeType;
   final String? url;
+  final String? type;
+
+  bool get isImage =>
+      type == 'image' || (mimeType?.toLowerCase().startsWith('image/') ?? false);
 
   factory ChatAsset.fromJson(Map<String, dynamic> json) => ChatAsset(
         pointer: _string(json['asset_pointer'] ?? json['pointer']),
         fileName: _string(json['file_name'] ?? json['name']),
         mimeType: _string(json['mime_type']),
         url: _string(json['url'] ?? json['download_url']),
+        type: _string(json['type']),
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -75,6 +81,7 @@ class ChatAsset {
         'file_name': fileName,
         'mime_type': mimeType,
         'url': url,
+        'type': type,
       };
 }
 
@@ -102,9 +109,15 @@ class ChatMessage {
   final List<Map<String, dynamic>> blocks;
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
-    final citationRaw = json['citations'];
-    final assetRaw = json['assets'];
-    final blockRaw = json['blocks'];
+    final parsedBlocks = _parseBlocks(json['blocks']);
+    final parsedCitations = <ChatCitation>[
+      ..._parseCitations(json['citations']),
+      ..._citationsFromBlocks(parsedBlocks),
+    ];
+    final parsedAssets = <ChatAsset>[
+      ..._parseAssets(json['assets']),
+      ..._assetsFromBlocks(parsedBlocks),
+    ];
     return ChatMessage(
       id: _string(json['id']) ?? _string(json['message_id']) ?? '',
       role: _string(json['role']) ?? 'assistant',
@@ -112,24 +125,9 @@ class ChatMessage {
       nodeId: _string(json['node_id']),
       status: _string(json['status']),
       endTurn: json['end_turn'] is bool ? json['end_turn'] as bool : null,
-      citations: citationRaw is List
-          ? citationRaw
-              .whereType<Map>()
-              .map((Map item) => ChatCitation.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false)
-          : const <ChatCitation>[],
-      assets: assetRaw is List
-          ? assetRaw
-              .whereType<Map>()
-              .map((Map item) => ChatAsset.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false)
-          : const <ChatAsset>[],
-      blocks: blockRaw is List
-          ? blockRaw
-              .whereType<Map>()
-              .map((Map item) => item.cast<String, dynamic>())
-              .toList(growable: false)
-          : const <Map<String, dynamic>>[],
+      citations: _dedupeCitations(parsedCitations),
+      assets: _dedupeAssets(parsedAssets),
+      blocks: parsedBlocks,
     );
   }
 
@@ -210,24 +208,12 @@ class ResearchReport {
   final List<ChatAsset> assets;
 
   factory ResearchReport.fromJson(Map<String, dynamic> json) {
-    final citations = json['citations'];
-    final assets = json['assets'];
     return ResearchReport(
       id: _string(json['id']),
       text: _string(json['text']) ?? '',
       status: _string(json['status']),
-      citations: citations is List
-          ? citations
-              .whereType<Map>()
-              .map((Map item) => ChatCitation.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false)
-          : const <ChatCitation>[],
-      assets: assets is List
-          ? assets
-              .whereType<Map>()
-              .map((Map item) => ChatAsset.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false)
-          : const <ChatAsset>[],
+      citations: _parseCitations(json['citations']),
+      assets: _parseAssets(json['assets']),
     );
   }
 
@@ -282,7 +268,10 @@ class ChatConversation {
           ? messageRaw
               .whereType<Map>()
               .map((Map item) => ChatMessage.fromJson(item.cast<String, dynamic>()))
-              .where((ChatMessage item) => item.text.isNotEmpty || item.assets.isNotEmpty)
+              .where(
+                (ChatMessage item) =>
+                    item.text.isNotEmpty || item.assets.isNotEmpty || item.blocks.isNotEmpty,
+              )
               .toList(growable: false)
           : const <ChatMessage>[],
       nodes: nodes,
@@ -391,6 +380,86 @@ class BridgeEvent {
     }
     return '';
   }
+}
+
+List<Map<String, dynamic>> _parseBlocks(dynamic value) {
+  return value is List
+      ? value
+          .whereType<Map>()
+          .map((Map item) => item.cast<String, dynamic>())
+          .toList(growable: false)
+      : const <Map<String, dynamic>>[];
+}
+
+List<ChatCitation> _parseCitations(dynamic value) {
+  return value is List
+      ? value
+          .whereType<Map>()
+          .map((Map item) => ChatCitation.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false)
+      : const <ChatCitation>[];
+}
+
+List<ChatAsset> _parseAssets(dynamic value) {
+  return value is List
+      ? value
+          .whereType<Map>()
+          .map((Map item) => ChatAsset.fromJson(item.cast<String, dynamic>()))
+          .toList(growable: false)
+      : const <ChatAsset>[];
+}
+
+List<ChatCitation> _citationsFromBlocks(List<Map<String, dynamic>> blocks) {
+  final result = <ChatCitation>[];
+  for (final block in blocks) {
+    if (block['type'] != 'citations') {
+      continue;
+    }
+    result.addAll(_parseCitations(block['items']));
+  }
+  return result;
+}
+
+List<ChatAsset> _assetsFromBlocks(List<Map<String, dynamic>> blocks) {
+  final result = <ChatAsset>[];
+  for (final block in blocks) {
+    final type = _string(block['type']);
+    if (type == 'image' || type == 'file') {
+      result.add(ChatAsset.fromJson(block));
+      continue;
+    }
+    final nested = block['assets'];
+    if (nested is List) {
+      for (final item in nested.whereType<Map>()) {
+        result.add(ChatAsset.fromJson(item.cast<String, dynamic>()));
+      }
+    }
+  }
+  return result;
+}
+
+List<ChatCitation> _dedupeCitations(List<ChatCitation> items) {
+  final seen = <String>{};
+  final result = <ChatCitation>[];
+  for (final item in items) {
+    final key = '${item.url ?? ''}\u0000${item.title ?? ''}\u0000${item.text ?? ''}';
+    if (seen.add(key)) {
+      result.add(item);
+    }
+  }
+  return List<ChatCitation>.unmodifiable(result);
+}
+
+List<ChatAsset> _dedupeAssets(List<ChatAsset> items) {
+  final seen = <String>{};
+  final result = <ChatAsset>[];
+  for (final item in items) {
+    final key = item.pointer ?? item.url ?? item.fileName ?? '';
+    if (key.isEmpty || seen.add(key)) {
+      result.add(item);
+    }
+  }
+  return List<ChatAsset>.unmodifiable(result);
 }
 
 String? _string(dynamic value) {
