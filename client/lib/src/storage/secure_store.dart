@@ -7,16 +7,46 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/bridge_client.dart';
 
+typedef SupportDirectoryProvider = Future<Directory> Function();
+
+abstract interface class SecureKeyValueStore {
+  Future<String?> read({required String key});
+  Future<void> write({required String key, required String value});
+  Future<void> delete({required String key});
+}
+
+class FlutterSecureKeyValueStore implements SecureKeyValueStore {
+  FlutterSecureKeyValueStore([FlutterSecureStorage? storage])
+      : _storage = storage ?? const FlutterSecureStorage();
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<String?> read({required String key}) => _storage.read(key: key);
+
+  @override
+  Future<void> write({required String key, required String value}) =>
+      _storage.write(key: key, value: value);
+
+  @override
+  Future<void> delete({required String key}) => _storage.delete(key: key);
+}
+
 class SecureStore {
-  SecureStore({FlutterSecureStorage? secureStorage})
-      : _secure = secureStorage ?? const FlutterSecureStorage();
+  SecureStore({
+    SecureKeyValueStore? secureStorage,
+    SupportDirectoryProvider? supportDirectoryProvider,
+  })  : _secure = secureStorage ?? FlutterSecureKeyValueStore(),
+        _supportDirectoryProvider =
+            supportDirectoryProvider ?? getApplicationSupportDirectory;
 
   static const String _baseUrlKey = 'bridge.base_url';
   static const String _apiKeyKey = 'bridge.api_key';
   static const String _cacheKeyKey = 'cache.aes256_key';
   static const String _cacheFileName = 'chat_cache.v1.enc.json';
 
-  final FlutterSecureStorage _secure;
+  final SecureKeyValueStore _secure;
+  final SupportDirectoryProvider _supportDirectoryProvider;
   final Cipher _cipher = AesGcm.with256bits();
   Future<void> _writeTail = Future<void>.value();
 
@@ -59,6 +89,9 @@ class SecureStore {
         throw const FormatException('Invalid encrypted cache envelope');
       }
       final map = envelope.cast<String, dynamic>();
+      if (map['version'] != 1) {
+        throw const FormatException('Unsupported encrypted cache version');
+      }
       final nonce = base64Decode((map['nonce'] ?? '').toString());
       final cipherText = base64Decode((map['ciphertext'] ?? '').toString());
       final mac = Mac(base64Decode((map['mac'] ?? '').toString()));
@@ -72,13 +105,7 @@ class SecureStore {
     } on Object {
       // A cache is disposable. Corruption, an invalidated device key, or an
       // interrupted write must never prevent the app from starting.
-      try {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } on FileSystemException {
-        // Best effort only; a future valid write replaces the stale cache.
-      }
+      await _deleteBestEffort(file);
       return null;
     }
   }
@@ -112,15 +139,32 @@ class SecureStore {
 
     final file = await _cacheFile();
     final temp = File('${file.path}.tmp');
+    final backup = File('${file.path}.bak');
+    await _deleteBestEffort(temp);
+    await _deleteBestEffort(backup);
     await temp.writeAsString(jsonEncode(envelope), flush: true);
+
+    var movedOriginal = false;
     try {
       if (await file.exists()) {
-        await file.delete();
+        await file.rename(backup.path);
+        movedOriginal = true;
       }
       await temp.rename(file.path);
+      await _deleteBestEffort(backup);
+    } catch (_) {
+      if (!await file.exists() && movedOriginal && await backup.exists()) {
+        try {
+          await backup.rename(file.path);
+        } on FileSystemException {
+          // The cache is disposable; preserve the original exception below.
+        }
+      }
+      rethrow;
     } finally {
-      if (await temp.exists()) {
-        await temp.delete();
+      await _deleteBestEffort(temp);
+      if (await file.exists()) {
+        await _deleteBestEffort(backup);
       }
     }
   }
@@ -128,17 +172,21 @@ class SecureStore {
   Future<void> clearCache() async {
     await _writeTail;
     final file = await _cacheFile();
-    if (await file.exists()) {
-      await file.delete();
-    }
+    await _deleteBestEffort(file);
+    await _deleteBestEffort(File('${file.path}.tmp'));
+    await _deleteBestEffort(File('${file.path}.bak'));
   }
 
   Future<SecretKey> _cacheKey() async {
     final existing = await _secure.read(key: _cacheKeyKey);
     if (existing != null && existing.isNotEmpty) {
-      final bytes = base64Decode(existing);
-      if (bytes.length == 32) {
-        return SecretKey(bytes);
+      try {
+        final bytes = base64Decode(existing);
+        if (bytes.length == 32) {
+          return SecretKey(bytes);
+        }
+      } on FormatException {
+        // Replace malformed key material with a fresh device-protected key.
       }
     }
     final key = await _cipher.newSecretKey();
@@ -148,11 +196,24 @@ class SecureStore {
   }
 
   Future<File> _cacheFile() async {
-    final root = await getApplicationSupportDirectory();
-    final directory = Directory('${root.path}${Platform.pathSeparator}secure_cache');
+    final root = await _supportDirectoryProvider();
+    final directory =
+        Directory('${root.path}${Platform.pathSeparator}secure_cache');
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }
-    return File('${directory.path}${Platform.pathSeparator}$_cacheFileName');
+    return File(
+      '${directory.path}${Platform.pathSeparator}$_cacheFileName',
+    );
+  }
+
+  Future<void> _deleteBestEffort(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on FileSystemException {
+      // Cache cleanup is best effort and must not take the app down.
+    }
   }
 }
