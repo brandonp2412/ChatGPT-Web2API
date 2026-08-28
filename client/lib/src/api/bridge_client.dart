@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../model/account_models.dart';
 import '../model/chat_models.dart';
 
 class BridgeSettings {
@@ -109,13 +110,9 @@ class BridgeClient {
     );
   }
 
-  Future<Map<String, dynamic>> health() async {
-    return _getMap('/health');
-  }
+  Future<Map<String, dynamic>> health() => _getMap('/health');
 
-  Future<Map<String, dynamic>> capabilities() async {
-    return _getMap('/v1/capabilities');
-  }
+  Future<Map<String, dynamic>> capabilities() => _getMap('/v1/capabilities');
 
   Future<List<ConversationSummary>> conversations({
     int offset = 0,
@@ -125,14 +122,7 @@ class BridgeClient {
       '/v1/conversations',
       <String, String?>{'offset': '$offset', 'limit': '$limit'},
     );
-    final data = response['data'];
-    return data is List
-        ? data
-            .whereType<Map>()
-            .map((Map item) => ConversationSummary.fromJson(item.cast<String, dynamic>()))
-            .where((ConversationSummary item) => item.id.isNotEmpty)
-            .toList(growable: false)
-        : const <ConversationSummary>[];
+    return _conversationSummaries(response['data']);
   }
 
   Future<List<ConversationSummary>> searchConversations(String query) async {
@@ -141,13 +131,7 @@ class BridgeClient {
       <String, String?>{'query': query},
     );
     final dynamic raw = response['data'] ?? response['items'] ?? response['conversations'];
-    return raw is List
-        ? raw
-            .whereType<Map>()
-            .map((Map item) => ConversationSummary.fromJson(item.cast<String, dynamic>()))
-            .where((ConversationSummary item) => item.id.isNotEmpty)
-            .toList(growable: false)
-        : const <ConversationSummary>[];
+    return _conversationSummaries(raw);
   }
 
   Future<ChatConversation> conversation(String id) async {
@@ -157,6 +141,43 @@ class BridgeClient {
       throw const BridgeException('Bridge returned a malformed conversation');
     }
     return ChatConversation.fromJson(data.cast<String, dynamic>());
+  }
+
+  Future<ChatConversation> renameConversation(String id, String title) async {
+    final response = await _patchMap(
+      '/v1/conversations/${Uri.encodeComponent(id)}',
+      <String, dynamic>{'title': title},
+    );
+    return _conversationFromField(response, 'data');
+  }
+
+  Future<ChatConversation> archiveConversation(String id, bool archived) async {
+    final response = await _patchMap(
+      '/v1/conversations/${Uri.encodeComponent(id)}',
+      <String, dynamic>{'archived': archived},
+    );
+    return _conversationFromField(response, 'data');
+  }
+
+  Future<void> deleteConversation(String id) async {
+    await _deleteMap('/v1/conversations/${Uri.encodeComponent(id)}');
+  }
+
+  Future<ChatConversation> messageAction({
+    required String conversationId,
+    required String action,
+    String? messageId,
+    String? text,
+  }) async {
+    final response = await _postMap(
+      '/v1/conversations/${Uri.encodeComponent(conversationId)}/actions',
+      <String, dynamic>{
+        'action': action,
+        if (messageId != null && messageId.isNotEmpty) 'message_id': messageId,
+        if (text != null) 'text': text,
+      },
+    );
+    return _conversationFromField(response, 'data');
   }
 
   Future<List<String>> models() async {
@@ -177,7 +198,10 @@ class BridgeClient {
     final response = await _getMap('/v1/reasoning-levels');
     final data = response['data'];
     return data is List
-        ? data.map((dynamic item) => item.toString()).where((String item) => item.isNotEmpty).toList(growable: false)
+        ? data
+            .map((dynamic item) => item.toString())
+            .where((String item) => item.isNotEmpty)
+            .toList(growable: false)
         : const <String>[];
   }
 
@@ -193,6 +217,85 @@ class BridgeClient {
       }
       return item.toString();
     }).where((String item) => item.isNotEmpty).toList(growable: false);
+  }
+
+  Future<List<ProjectSummary>> projects() async {
+    final response = await _getMap('/v1/projects');
+    final data = response['data'];
+    return data is List
+        ? data
+            .whereType<Map>()
+            .map((Map item) => ProjectSummary.fromJson(item.cast<String, dynamic>()))
+            .where((ProjectSummary item) => item.id.isNotEmpty)
+            .toList(growable: false)
+        : const <ProjectSummary>[];
+  }
+
+  Future<List<ConversationSummary>> projectConversations(
+    String projectId, {
+    String cursor = '0',
+  }) async {
+    final response = await _getMap(
+      '/v1/projects/${Uri.encodeComponent(projectId)}/conversations',
+      <String, String?>{'cursor': cursor},
+    );
+    final data = response['data'];
+    if (data is Map) {
+      return _conversationSummaries(
+        data['items'] ?? data['conversations'] ?? data['data'],
+      );
+    }
+    return _conversationSummaries(data);
+  }
+
+  Future<List<GptSummary>> gpts() async {
+    final response = await _getMap('/v1/gpts');
+    final data = response['data'];
+    return data is List
+        ? data
+            .whereType<Map>()
+            .map((Map item) => GptSummary.fromJson(item.cast<String, dynamic>()))
+            .where((GptSummary item) => item.id.isNotEmpty)
+            .toList(growable: false)
+        : const <GptSummary>[];
+  }
+
+  Future<List<LibraryItem>> library() async {
+    final response = await _getMap('/v1/library');
+    final data = response['data'];
+    return data is List
+        ? data
+            .whereType<Map>()
+            .map((Map item) => LibraryItem.fromJson(item.cast<String, dynamic>()))
+            .where((LibraryItem item) => item.name.isNotEmpty)
+            .toList(growable: false)
+        : const <LibraryItem>[];
+  }
+
+  Future<List<InteractiveAction>> interactiveActions({String? conversationId}) async {
+    final response = await _getMap(
+      '/v1/ui-actions',
+      <String, String?>{'conversation_id': conversationId},
+    );
+    final data = response['data'];
+    return data is List
+        ? data
+            .whereType<Map>()
+            .map((Map item) => InteractiveAction.fromJson(item.cast<String, dynamic>()))
+            .where((InteractiveAction item) => item.label.isNotEmpty)
+            .toList(growable: false)
+        : const <InteractiveAction>[];
+  }
+
+  Future<void> triggerInteractiveAction({
+    required String label,
+    String? conversationId,
+  }) async {
+    await _postMap('/v1/ui-actions', <String, dynamic>{
+      'label': label,
+      if (conversationId != null && conversationId.isNotEmpty)
+        'conversation_id': conversationId,
+    });
   }
 
   Future<UploadedAttachment> uploadAttachment(File file) async {
@@ -253,26 +356,7 @@ class BridgeClient {
       final body = await response.stream.bytesToString();
       throw _error(response.statusCode, body);
     }
-
-    await for (final line in response.stream
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())) {
-      if (!line.startsWith('data:')) {
-        continue;
-      }
-      final payload = line.substring(5).trim();
-      if (payload.isEmpty || payload == '[DONE]') {
-        continue;
-      }
-      try {
-        final decoded = jsonDecode(payload);
-        if (decoded is Map) {
-          yield BridgeEvent(data: decoded.cast<String, dynamic>(), raw: payload);
-        }
-      } on FormatException {
-        yield BridgeEvent(data: <String, dynamic>{'type': 'text', 'delta': payload}, raw: payload);
-      }
-    }
+    yield* _eventStream(response.stream);
   }
 
   Stream<BridgeEvent> backgroundEvents(
@@ -295,28 +379,13 @@ class BridgeClient {
       final body = await response.stream.bytesToString();
       throw _error(response.statusCode, body);
     }
-    await for (final line in response.stream
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())) {
-      if (!line.startsWith('data:')) {
-        continue;
-      }
-      final payload = line.substring(5).trim();
-      if (payload.isEmpty || payload == '[DONE]') {
-        continue;
-      }
-      try {
-        final decoded = jsonDecode(payload);
-        if (decoded is Map) {
-          yield BridgeEvent(data: decoded.cast<String, dynamic>(), raw: payload);
-        }
-      } on FormatException {
-        continue;
-      }
-    }
+    yield* _eventStream(response.stream);
   }
 
-  Future<ChatConversation?> selectBranch(String conversationId, String targetNodeId) async {
+  Future<ChatConversation?> selectBranch(
+    String conversationId,
+    String targetNodeId,
+  ) async {
     final response = await _postMap(
       '/v1/conversations/${Uri.encodeComponent(conversationId)}/branch/select',
       <String, dynamic>{'target_node_id': targetNodeId},
@@ -331,6 +400,50 @@ class BridgeClient {
     await _postMap('/v1/chat/stop', const <String, dynamic>{});
   }
 
+  Stream<BridgeEvent> _eventStream(Stream<List<int>> bytes) async* {
+    await for (final line in bytes.transform(utf8.decoder).transform(const LineSplitter())) {
+      if (!line.startsWith('data:')) {
+        continue;
+      }
+      final payload = line.substring(5).trim();
+      if (payload.isEmpty || payload == '[DONE]') {
+        continue;
+      }
+      try {
+        final decoded = jsonDecode(payload);
+        if (decoded is Map) {
+          yield BridgeEvent(data: decoded.cast<String, dynamic>(), raw: payload);
+        }
+      } on FormatException {
+        yield BridgeEvent(
+          data: <String, dynamic>{'type': 'text', 'delta': payload},
+          raw: payload,
+        );
+      }
+    }
+  }
+
+  List<ConversationSummary> _conversationSummaries(dynamic raw) {
+    return raw is List
+        ? raw
+            .whereType<Map>()
+            .map((Map item) => ConversationSummary.fromJson(item.cast<String, dynamic>()))
+            .where((ConversationSummary item) => item.id.isNotEmpty)
+            .toList(growable: false)
+        : const <ConversationSummary>[];
+  }
+
+  ChatConversation _conversationFromField(
+    Map<String, dynamic> response,
+    String field,
+  ) {
+    final data = response[field];
+    if (data is! Map) {
+      throw const BridgeException('Bridge returned a malformed conversation');
+    }
+    return ChatConversation.fromJson(data.cast<String, dynamic>());
+  }
+
   Future<Map<String, dynamic>> _getMap(
     String path, [
     Map<String, String?> query = const <String, String?>{},
@@ -342,12 +455,40 @@ class BridgeClient {
     return _decodeMap(response.body);
   }
 
-  Future<Map<String, dynamic>> _postMap(String path, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> _postMap(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     final response = await _http.post(
       _uri(path),
       headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _error(response.statusCode, response.body);
+    }
+    return response.body.trim().isEmpty
+        ? <String, dynamic>{}
+        : _decodeMap(response.body);
+  }
+
+  Future<Map<String, dynamic>> _patchMap(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _http.patch(
+      _uri(path),
+      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _error(response.statusCode, response.body);
+    }
+    return _decodeMap(response.body);
+  }
+
+  Future<Map<String, dynamic>> _deleteMap(String path) async {
+    final response = await _http.delete(_uri(path), headers: _headers);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _error(response.statusCode, response.body);
     }
