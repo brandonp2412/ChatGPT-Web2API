@@ -1,5 +1,5 @@
-import 'package:chatgpt_bridge_client/src/state/pagination.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sloppa/src/state/pagination.dart';
 
 void main() {
   test('offset pagination loads beyond the old 2000 item ceiling', () async {
