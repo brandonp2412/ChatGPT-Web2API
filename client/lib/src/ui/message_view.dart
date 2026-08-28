@@ -500,9 +500,16 @@ class MessageView extends StatelessWidget {
 }
 
 class ResearchReportView extends StatelessWidget {
-  const ResearchReportView({required this.report, super.key});
+  const ResearchReportView({
+    required this.report,
+    required this.settings,
+    this.conversationId,
+    super.key,
+  });
 
   final ResearchReport report;
+  final BridgeSettings settings;
+  final String? conversationId;
 
   @override
   Widget build(BuildContext context) {
@@ -529,6 +536,27 @@ class ResearchReportView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 MarkdownBody(data: report.text, selectable: true),
+                if (report.assets.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: report.assets.map((ChatAsset asset) {
+                      if (asset.isImage) {
+                        return BridgeAssetImage(
+                          settings: settings,
+                          asset: asset,
+                          conversationId: conversationId,
+                        );
+                      }
+                      return BridgeAssetDownloadButton(
+                        settings: settings,
+                        asset: asset,
+                        conversationId: conversationId,
+                      );
+                    }).toList(growable: false),
+                  ),
+                ],
                 if (report.citations.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 12),
                   Wrap(
