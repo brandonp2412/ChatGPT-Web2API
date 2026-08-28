@@ -10,35 +10,48 @@ class CursorPage<T> {
 
 /// Collect every offset-based page without imposing an arbitrary page ceiling.
 ///
-/// A backend bug that repeats the same full page cannot loop forever: requests
-/// stop when a page contributes no new IDs. Offsets still advance by the raw
-/// page length so occasional duplicate records do not shift later pages.
+/// Overlapping pages are allowed. A backend that ignores offsets and repeats a
+/// full page is detected by a stable page signature rather than by an arbitrary
+/// maximum page count.
 Future<List<T>> collectOffsetPages<T>({
   required OffsetPageLoader<T> loadPage,
   required String Function(T item) idOf,
   int pageSize = 100,
+  int initialOffset = 0,
 }) async {
   if (pageSize <= 0) {
     throw ArgumentError.value(pageSize, 'pageSize', 'must be positive');
   }
+  if (initialOffset < 0) {
+    throw ArgumentError.value(initialOffset, 'initialOffset', 'must be non-negative');
+  }
 
   final result = <T>[];
   final seenIds = <String>{};
-  var offset = 0;
+  final seenPages = <String>{};
+  var offset = initialOffset;
 
   while (true) {
     final page = await loadPage(offset, pageSize);
-    var added = 0;
-    for (final item in page) {
-      final id = idOf(item);
-      if (id.isEmpty || !seenIds.add(id)) {
-        continue;
-      }
-      result.add(item);
-      added++;
+    if (page.isEmpty) {
+      break;
     }
 
-    if (page.length < pageSize || page.isEmpty || added == 0) {
+    final signatureIds = page.map(idOf).where((String id) => id.isNotEmpty).toList()
+      ..sort();
+    final signature = '${page.length}\u0000${signatureIds.join('\u0001')}';
+    if (!seenPages.add(signature)) {
+      break;
+    }
+
+    for (final item in page) {
+      final id = idOf(item);
+      if (id.isNotEmpty && seenIds.add(id)) {
+        result.add(item);
+      }
+    }
+
+    if (page.length < pageSize) {
       break;
     }
     offset += page.length;
@@ -47,7 +60,7 @@ Future<List<T>> collectOffsetPages<T>({
   return result;
 }
 
-/// Collect every cursor-based page while refusing cursor cycles.
+/// Collect every cursor-based page while refusing cursor or repeated-page cycles.
 Future<List<T>> collectCursorPages<T>({
   required CursorPageLoader<T> loadPage,
   required String Function(T item) idOf,
@@ -56,10 +69,18 @@ Future<List<T>> collectCursorPages<T>({
   final result = <T>[];
   final seenIds = <String>{};
   final seenCursors = <String>{};
+  final seenPages = <String>{};
   var cursor = initialCursor;
 
   while (seenCursors.add(cursor)) {
     final page = await loadPage(cursor);
+    final signatureIds =
+        page.items.map(idOf).where((String id) => id.isNotEmpty).toList()..sort();
+    final signature = '${page.items.length}\u0000${signatureIds.join('\u0001')}';
+    if (!seenPages.add(signature) && page.items.isNotEmpty) {
+      break;
+    }
+
     for (final item in page.items) {
       final id = idOf(item);
       if (id.isNotEmpty && seenIds.add(id)) {
