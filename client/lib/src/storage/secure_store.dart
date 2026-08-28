@@ -18,6 +18,7 @@ class SecureStore {
 
   final FlutterSecureStorage _secure;
   final Cipher _cipher = AesGcm.with256bits();
+  Future<void> _writeTail = Future<void>.value();
 
   Future<BridgeSettings> loadSettings() async {
     final baseUrl = await _secure.read(key: _baseUrlKey);
@@ -47,6 +48,7 @@ class SecureStore {
   }
 
   Future<Map<String, dynamic>?> readCache() async {
+    await _writeTail;
     final file = await _cacheFile();
     if (!await file.exists()) {
       return null;
@@ -70,13 +72,31 @@ class SecureStore {
     } on Object {
       // A cache is disposable. Corruption, an invalidated device key, or an
       // interrupted write must never prevent the app from starting.
-      await file.delete().catchError((Object _) => file);
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } on FileSystemException {
+        // Best effort only; a future valid write replaces the stale cache.
+      }
       return null;
     }
   }
 
-  Future<void> writeCache(Map<String, dynamic> data) async {
-    final clearBytes = utf8.encode(jsonEncode(data));
+  Future<void> writeCache(Map<String, dynamic> data) {
+    // Snapshot before queueing: callers may mutate their state while another
+    // encrypted write is in flight.
+    final encoded = jsonEncode(data);
+    final operation = _writeTail.then((_) => _writeEncodedCache(encoded));
+    _writeTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return operation;
+  }
+
+  Future<void> _writeEncodedCache(String encoded) async {
+    final clearBytes = utf8.encode(encoded);
     final nonce = _cipher.newNonce();
     final box = await _cipher.encrypt(
       clearBytes,
@@ -93,13 +113,20 @@ class SecureStore {
     final file = await _cacheFile();
     final temp = File('${file.path}.tmp');
     await temp.writeAsString(jsonEncode(envelope), flush: true);
-    if (await file.exists()) {
-      await file.delete();
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await temp.rename(file.path);
+    } finally {
+      if (await temp.exists()) {
+        await temp.delete();
+      }
     }
-    await temp.rename(file.path);
   }
 
   Future<void> clearCache() async {
+    await _writeTail;
     final file = await _cacheFile();
     if (await file.exists()) {
       await file.delete();
