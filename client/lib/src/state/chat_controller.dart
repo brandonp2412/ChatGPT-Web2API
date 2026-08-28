@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 
 import '../api/bridge_client.dart';
 import '../api/parity_actions_api.dart';
+import '../api/project_conversation_pager.dart';
 import '../model/account_models.dart';
 import '../model/chat_models.dart';
 import '../storage/secure_store.dart';
+import 'pagination.dart';
 
 enum SidebarSection { chats, projects, gpts }
 
@@ -220,7 +222,7 @@ class ChatController extends ChangeNotifier {
     if (searchQuery.trim().isNotEmpty) {
       items = await client.searchConversations(searchQuery.trim());
     } else if (activeProject != null) {
-      items = await client.projectConversations(activeProject!.id);
+      items = await _loadAllProjectConversations(activeProject!.id);
     } else {
       items = await _loadAllTopLevelConversations();
     }
@@ -229,21 +231,23 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<List<ConversationSummary>> _loadAllTopLevelConversations() async {
-    const pageSize = 100;
-    const maxPages = 20;
-    final result = <ConversationSummary>[];
-    for (var page = 0; page < maxPages; page++) {
-      final items = await client.conversations(
-        offset: page * pageSize,
-        limit: pageSize,
-      );
-      result.addAll(items);
-      if (items.length < pageSize) {
-        break;
-      }
-    }
-    return result;
+  Future<List<ConversationSummary>> _loadAllTopLevelConversations() {
+    return collectOffsetPages<ConversationSummary>(
+      loadPage: (int offset, int limit) => client.conversations(
+        offset: offset,
+        limit: limit,
+      ),
+      idOf: (ConversationSummary item) => item.id,
+    );
+  }
+
+  Future<List<ConversationSummary>> _loadAllProjectConversations(
+    String projectId,
+  ) {
+    return loadAllProjectConversations(
+      settings: settings,
+      projectId: projectId,
+    );
   }
 
   Future<void> search(String query) async {
@@ -305,7 +309,7 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final results = await Future.wait<Object>(<Future<Object>>[
-        client.projectConversations(project.id),
+        _loadAllProjectConversations(project.id),
         actions.projectFiles(project.id),
       ]);
       conversations = results[0] as List<ConversationSummary>;
