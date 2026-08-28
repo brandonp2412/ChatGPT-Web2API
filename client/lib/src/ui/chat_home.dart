@@ -95,7 +95,8 @@ class _ChatHomeState extends State<ChatHome> {
                     PopupMenuButton<_ConversationMenuAction>(
                       tooltip: 'Chat actions',
                       onSelected: _handleConversationMenu,
-                      itemBuilder: (BuildContext context) => <PopupMenuEntry<_ConversationMenuAction>>[
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<_ConversationMenuAction>>[
                         const PopupMenuItem(
                           value: _ConversationMenuAction.rename,
                           child: ListTile(
@@ -501,14 +502,19 @@ class _ChatHomeState extends State<ChatHome> {
     switch (action) {
       case _ConversationMenuAction.rename:
         await _renameChat();
+        return;
       case _ConversationMenuAction.pin:
         await controller.toggleActivePin();
+        return;
       case _ConversationMenuAction.share:
         await _shareChat();
+        return;
       case _ConversationMenuAction.archive:
         await _confirmConversationMutation(delete: false);
+        return;
       case _ConversationMenuAction.delete:
         await _confirmConversationMutation(delete: true);
+        return;
     }
   }
 
@@ -813,7 +819,6 @@ class _ChatHomeState extends State<ChatHome> {
             onPressed: () => Navigator.pop(context, _ProjectDialogAction.delete),
             child: const Text('Delete project'),
           ),
-          const Spacer(),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
