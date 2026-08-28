@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -19,9 +20,12 @@ class ParityActionsApi {
           'Authorization': 'Bearer ${settings.apiKey.trim()}',
       };
 
-  Uri _uri(String path) {
+  Uri _uri(String path, [Map<String, String>? query]) {
     final base = settings.baseUri;
-    return base.replace(path: '${base.path}$path'.replaceAll('//', '/'));
+    return base.replace(
+      path: '${base.path}$path'.replaceAll('//', '/'),
+      queryParameters: query,
+    );
   }
 
   Future<ChatConversation> blockAction({
@@ -191,6 +195,27 @@ class ParityActionsApi {
         .map((Map item) => ProjectFile.fromJson(item.cast<String, dynamic>()))
         .where((ProjectFile item) => item.id.isNotEmpty)
         .toList(growable: false);
+  }
+
+  Future<Uint8List> projectFileBytes(
+    String projectId,
+    String fileId,
+  ) async {
+    final response = await _http.get(
+      _uri(
+        '/v1/projects/${Uri.encodeComponent(projectId)}'
+        '/files/${Uri.encodeComponent(fileId)}/download',
+        const <String, String>{'inline': '1'},
+      ),
+      headers: <String, String>{
+        ..._headers,
+        'Accept': '*/*',
+      },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw _error(response.statusCode, response.body);
+    }
+    return response.bodyBytes;
   }
 
   Future<Map<String, dynamic>> _get(String path) async {
