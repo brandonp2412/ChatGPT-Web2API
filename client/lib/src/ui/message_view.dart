@@ -9,16 +9,23 @@ class MessageView extends StatelessWidget {
     required this.message,
     required this.conversation,
     required this.onSelectBranch,
+    required this.onRegenerate,
+    required this.onEdit,
+    required this.onBranchInNewChat,
     super.key,
   });
 
   final ChatMessage message;
   final ChatConversation? conversation;
   final ValueChanged<String> onSelectBranch;
+  final ValueChanged<ChatMessage> onRegenerate;
+  final Future<void> Function(ChatMessage message, String replacement) onEdit;
+  final ValueChanged<ChatMessage> onBranchInNewChat;
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == 'user';
+    final isStreaming = message.status == 'in_progress';
     final theme = Theme.of(context);
     final branch = _branchPosition();
     final content = ConstrainedBox(
@@ -52,7 +59,7 @@ class MessageView extends StatelessWidget {
                 }
               },
             ),
-          if (message.status == 'in_progress') ...<Widget>[
+          if (isStreaming) ...<Widget>[
             const SizedBox(height: 8),
             const SizedBox(
               width: 14,
@@ -102,34 +109,7 @@ class MessageView extends StatelessWidget {
               }).toList(growable: false),
             ),
           ],
-          if (!isUser && branch != null) ...<Widget>[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                IconButton(
-                  tooltip: 'Previous response',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: branch.hasPrevious && branch.previousNode != null
-                      ? () => onSelectBranch(branch.previousNode!)
-                      : null,
-                  icon: const Icon(Icons.chevron_left, size: 20),
-                ),
-                Text(
-                  '${branch.index + 1}/${branch.siblings.length}',
-                  style: theme.textTheme.labelSmall,
-                ),
-                IconButton(
-                  tooltip: 'Next response',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: branch.hasNext && branch.nextNode != null
-                      ? () => onSelectBranch(branch.nextNode!)
-                      : null,
-                  icon: const Icon(Icons.chevron_right, size: 20),
-                ),
-              ],
-            ),
-          ],
+          if (!isStreaming) _messageActions(context, branch),
         ],
       ),
     );
@@ -143,22 +123,102 @@ class MessageView extends StatelessWidget {
     );
   }
 
+  Widget _messageActions(BuildContext context, BranchPosition? branch) {
+    final isUser = message.role == 'user';
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (isUser)
+            IconButton(
+              tooltip: 'Edit message',
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => _showEditDialog(context),
+              icon: const Icon(Icons.edit_outlined),
+            )
+          else
+            IconButton(
+              tooltip: 'Regenerate',
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: () => onRegenerate(message),
+              icon: const Icon(Icons.refresh),
+            ),
+          IconButton(
+            tooltip: 'Branch in new chat',
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            onPressed: () => onBranchInNewChat(message),
+            icon: const Icon(Icons.call_split_outlined),
+          ),
+          if (!isUser && branch != null) ...<Widget>[
+            IconButton(
+              tooltip: 'Previous response',
+              visualDensity: VisualDensity.compact,
+              onPressed: branch.hasPrevious && branch.previousNode != null
+                  ? () => onSelectBranch(branch.previousNode!)
+                  : null,
+              icon: const Icon(Icons.chevron_left, size: 20),
+            ),
+            Text(
+              '${branch.index + 1}/${branch.siblings.length}',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+            IconButton(
+              tooltip: 'Next response',
+              visualDensity: VisualDensity.compact,
+              onPressed: branch.hasNext && branch.nextNode != null
+                  ? () => onSelectBranch(branch.nextNode!)
+                  : null,
+              icon: const Icon(Icons.chevron_right, size: 20),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditDialog(BuildContext context) async {
+    final controller = TextEditingController(text: message.text);
+    final replacement = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Edit message'),
+        content: SizedBox(
+          width: 520,
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 12,
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (replacement != null && replacement.trim().isNotEmpty) {
+      await onEdit(message, replacement);
+    }
+  }
+
   BranchPosition? _branchPosition() {
     final source = conversation;
     if (source == null) {
       return null;
     }
-    final direct = source.branchPositionFor(message);
-    if (direct != null) {
-      return direct;
-    }
-    for (final node in source.nodes.values) {
-      final candidate = node.message;
-      if (candidate != null && candidate.id == message.id) {
-        return source.branchPositionFor(candidate);
-      }
-    }
-    return null;
+    return source.branchPositionFor(message);
   }
 }
 
@@ -205,7 +265,8 @@ class ResearchReportView extends StatelessWidget {
                             ? null
                             : () {
                                 final uri = Uri.tryParse(citation.url!);
-                                if (uri != null) {
+                                if (uri != null &&
+                                    (uri.scheme == 'https' || uri.scheme == 'http')) {
                                   launchUrl(uri, mode: LaunchMode.externalApplication);
                                 }
                               },
