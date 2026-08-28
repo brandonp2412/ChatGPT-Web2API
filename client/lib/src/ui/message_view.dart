@@ -80,6 +80,7 @@ class MessageView extends StatelessWidget {
   }
 
   Widget _assistantBody(BuildContext context) {
+    final editable = _editableBlock();
     final extraBlocks = message.blocks.where((Map<String, dynamic> block) {
       final type = block['type']?.toString();
       return type != 'text' &&
@@ -148,7 +149,7 @@ class MessageView extends StatelessWidget {
             }).toList(growable: false),
           ),
         ],
-        if (_editableBlock() case final editable?) ...<Widget>[
+        if (editable != null) ...<Widget>[
           const SizedBox(height: 8),
           _blockControls(context, editable),
         ],
