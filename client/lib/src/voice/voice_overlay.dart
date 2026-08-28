@@ -232,7 +232,7 @@ class _VoiceDialogState extends State<VoiceDialog> {
 
   Widget _statusGraphic(VoiceSessionState state) {
     if (state == VoiceSessionState.connected) {
-      return const Icon(Icons.multgraphic_eq, size: 58);
+      return const Icon(Icons.graphic_eq, size: 58);
     }
     if (state == VoiceSessionState.failed) {
       return Icon(
