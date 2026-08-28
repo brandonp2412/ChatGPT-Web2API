@@ -8,19 +8,19 @@ import 'src/voice/voice_overlay.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final controller = ChatController(store: SecureStore());
-  runApp(ChatBridgeApp(controller: controller));
+  runApp(SloppaApp(controller: controller));
   await controller.initialize();
 }
 
-class ChatBridgeApp extends StatelessWidget {
-  const ChatBridgeApp({required this.controller, super.key});
+class SloppaApp extends StatelessWidget {
+  const SloppaApp({required this.controller, super.key});
 
   final ChatController controller;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ChatGPT',
+      title: 'Sloppa',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: ThemeData(
