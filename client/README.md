@@ -6,7 +6,7 @@ The app talks only to your own ChatGPT-Web2API server. It never receives or stor
 
 ## Bootstrap
 
-The durable Dart source lives here. On a machine with Flutter installed:
+The durable Flutter application source lives here. Platform runners are generated from Flutter's current stable templates rather than vendored stale Gradle/Xcode boilerplate:
 
 ```bash
 cd client
@@ -16,9 +16,9 @@ flutter analyze
 flutter test
 ```
 
-`flutter create` preserves the application source while creating platform runner directories. CI performs this bootstrap for Android, injects `INTERNET` and `RECORD_AUDIO`, and builds a debug APK as the compile gate.
+CI performs the Android bootstrap on every change, injects `INTERNET` and `RECORD_AUDIO`, runs analysis/tests, and builds a debug APK. This deliberately validates against the current Flutter Android template instead of freezing an old Gradle wrapper in the repository.
 
-For a committed/generated Android runner, ensure `android/app/src/main/AndroidManifest.xml` contains:
+For a generated Android runner, ensure `android/app/src/main/AndroidManifest.xml` contains:
 
 ```xml
 <uses-permission android:name="android.permission.INTERNET" />
