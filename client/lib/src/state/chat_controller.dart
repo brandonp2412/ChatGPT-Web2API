@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../api/bridge_client.dart';
+import '../api/parity_actions_api.dart';
 import '../model/account_models.dart';
 import '../model/chat_models.dart';
 import '../storage/secure_store.dart';
@@ -15,6 +16,7 @@ class ChatController extends ChangeNotifier {
 
   final SecureStore _store;
   BridgeClient? _client;
+  ParityActionsApi? _actionsApi;
   StreamSubscription<BridgeEvent>? _backgroundSubscription;
 
   BridgeSettings settings = const BridgeSettings(
@@ -22,12 +24,16 @@ class ChatController extends ChangeNotifier {
   );
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   List<ProjectSummary> projects = const <ProjectSummary>[];
+  List<ProjectFile> activeProjectFiles = const <ProjectFile>[];
   List<GptSummary> gpts = const <GptSummary>[];
   List<LibraryItem> libraryItems = const <LibraryItem>[];
+  List<MemoryItem> memoryItems = const <MemoryItem>[];
   List<InteractiveAction> interactiveActions = const <InteractiveAction>[];
   ChatConversation? activeConversation;
   ProjectSummary? activeProject;
   GptSummary? activeGpt;
+  ShareResult? activeShare;
+  Set<String> pinnedConversationIds = <String>{};
   List<String> models = const <String>['auto'];
   List<String> reasoningLevels = const <String>[];
   List<String> toolLabels = const <String>[];
@@ -38,6 +44,7 @@ class ChatController extends ChangeNotifier {
   String selectedModel = 'auto';
   String? selectedReasoningLevel;
   String selectedMode = 'normal';
+  String? selectedApp;
   String searchQuery = '';
   String streamingText = '';
   ChatMessage? optimisticUserMessage;
@@ -48,6 +55,8 @@ class ChatController extends ChangeNotifier {
   bool loadingConversation = false;
   bool loadingNavigation = false;
   bool loadingLibrary = false;
+  bool loadingMemories = false;
+  bool parityActionBusy = false;
   bool sending = false;
   bool connected = false;
 
@@ -55,6 +64,14 @@ class ChatController extends ChangeNotifier {
     final value = _client;
     if (value == null) {
       throw const BridgeException('Bridge client is not initialized');
+    }
+    return value;
+  }
+
+  ParityActionsApi get actions {
+    final value = _actionsApi;
+    if (value == null) {
+      throw const BridgeException('Parity action client is not initialized');
     }
     return value;
   }
@@ -79,6 +96,32 @@ class ChatController extends ChangeNotifier {
     return messages;
   }
 
+  List<ConversationSummary> get displayedConversations {
+    if (pinnedConversationIds.isEmpty) {
+      return conversations;
+    }
+    final items = List<ConversationSummary>.of(conversations, growable: false);
+    items.sort((ConversationSummary a, ConversationSummary b) {
+      final aPinned = pinnedConversationIds.contains(a.id);
+      final bPinned = pinnedConversationIds.contains(b.id);
+      if (aPinned != bPinned) {
+        return aPinned ? -1 : 1;
+      }
+      final aTime = a.updateTime;
+      final bTime = b.updateTime;
+      if (aTime != null && bTime != null) {
+        return bTime.compareTo(aTime);
+      }
+      return 0;
+    });
+    return items;
+  }
+
+  bool get activeConversationPinned {
+    final id = activeConversation?.id;
+    return id != null && pinnedConversationIds.contains(id);
+  }
+
   List<String> get availableModes {
     final normalized = toolLabels.map((String item) => item.toLowerCase()).join(' | ');
     final result = <String>['normal'];
@@ -97,9 +140,16 @@ class ChatController extends ChangeNotifier {
     return result;
   }
 
+  List<String> get appLabels {
+    return toolLabels
+        .where((String label) => !_isBuiltInModeLabel(label))
+        .toSet()
+        .toList(growable: false);
+  }
+
   Future<void> initialize() async {
     settings = await _store.loadSettings();
-    _replaceClient();
+    _replaceClients();
     await _restoreCache();
     initialized = true;
     notifyListeners();
@@ -117,7 +167,7 @@ class ChatController extends ChangeNotifier {
       apiKey: next.apiKey.trim(),
     );
     await _stopBackgroundEvents();
-    _replaceClient();
+    _replaceClients();
     connected = false;
     errorMessage = null;
     notifyListeners();
@@ -145,9 +195,13 @@ class ChatController extends ChangeNotifier {
         _loadComposerOptions(),
         _loadNavigation(),
       ]);
+      await refreshPins(silent: true);
       final active = activeConversation;
       if (active != null && active.id.isNotEmpty) {
         await selectConversation(active.id, preserveLoadingState: true);
+      }
+      if (activeProject != null) {
+        await loadActiveProjectFiles(silent: true);
       }
       errorMessage = null;
     } on Object catch (error) {
@@ -168,11 +222,28 @@ class ChatController extends ChangeNotifier {
     } else if (activeProject != null) {
       items = await client.projectConversations(activeProject!.id);
     } else {
-      items = await client.conversations(limit: 80);
+      items = await _loadAllTopLevelConversations();
     }
     conversations = items;
     await _persistCache();
     notifyListeners();
+  }
+
+  Future<List<ConversationSummary>> _loadAllTopLevelConversations() async {
+    const pageSize = 100;
+    const maxPages = 20;
+    final result = <ConversationSummary>[];
+    for (var page = 0; page < maxPages; page++) {
+      final items = await client.conversations(
+        offset: page * pageSize,
+        limit: pageSize,
+      );
+      result.addAll(items);
+      if (items.length < pageSize) {
+        break;
+      }
+    }
+    return result;
   }
 
   Future<void> search(String query) async {
@@ -189,17 +260,31 @@ class ChatController extends ChangeNotifier {
     sidebarSection = section;
     searchQuery = '';
     loadingNavigation = true;
+    await _stopBackgroundEvents();
     notifyListeners();
     try {
+      activeConversation = null;
+      activeShare = null;
+      interactiveActions = const <InteractiveAction>[];
       if (section == SidebarSection.chats) {
         activeProject = null;
+        activeProjectFiles = const <ProjectFile>[];
         activeGpt = null;
-        conversations = await client.conversations(limit: 80);
+        conversations = await _loadAllTopLevelConversations();
       } else if (section == SidebarSection.projects) {
+        activeProject = null;
+        activeProjectFiles = const <ProjectFile>[];
+        activeGpt = null;
+        conversations = const <ConversationSummary>[];
         projects = await client.projects();
       } else {
+        activeProject = null;
+        activeProjectFiles = const <ProjectFile>[];
+        activeGpt = null;
+        conversations = const <ConversationSummary>[];
         gpts = await client.gpts();
       }
+      await _persistCache();
     } on Object catch (error) {
       errorMessage = _message(error);
     } finally {
@@ -213,12 +298,18 @@ class ChatController extends ChangeNotifier {
     activeProject = project;
     activeGpt = null;
     activeConversation = null;
+    activeShare = null;
     temporaryChat = false;
     sidebarSection = SidebarSection.projects;
     loadingNavigation = true;
     notifyListeners();
     try {
-      conversations = await client.projectConversations(project.id);
+      final results = await Future.wait<Object>(<Future<Object>>[
+        client.projectConversations(project.id),
+        actions.projectFiles(project.id),
+      ]);
+      conversations = results[0] as List<ConversationSummary>;
+      activeProjectFiles = results[1] as List<ProjectFile>;
       await _persistCache();
     } on Object catch (error) {
       errorMessage = _message(error);
@@ -232,7 +323,9 @@ class ChatController extends ChangeNotifier {
     await _stopBackgroundEvents();
     activeGpt = gpt;
     activeProject = null;
+    activeProjectFiles = const <ProjectFile>[];
     activeConversation = null;
+    activeShare = null;
     temporaryChat = false;
     sidebarSection = SidebarSection.gpts;
     conversations = const <ConversationSummary>[];
@@ -244,16 +337,19 @@ class ChatController extends ChangeNotifier {
   Future<void> newChat({bool keepContext = false}) async {
     await _stopBackgroundEvents();
     activeConversation = null;
+    activeShare = null;
     optimisticUserMessage = null;
     streamingText = '';
+    interactiveActions = const <InteractiveAction>[];
     pendingAttachments = const <UploadedAttachment>[];
     pendingLibraryFiles = const <String>[];
     temporaryChat = false;
     if (!keepContext) {
       activeProject = null;
+      activeProjectFiles = const <ProjectFile>[];
       activeGpt = null;
       sidebarSection = SidebarSection.chats;
-      conversations = await client.conversations(limit: 80).catchError(
+      conversations = await _loadAllTopLevelConversations().catchError(
             (Object _) => conversations,
           );
     }
@@ -277,6 +373,7 @@ class ChatController extends ChangeNotifier {
     }
     try {
       activeConversation = await client.conversation(id);
+      activeShare = null;
       temporaryChat = false;
       optimisticUserMessage = null;
       streamingText = '';
@@ -316,6 +413,7 @@ class ChatController extends ChangeNotifier {
       await client.archiveConversation(active.id, true);
       await newChat(keepContext: activeProject != null || activeGpt != null);
       await refreshConversations();
+      await refreshPins(silent: true);
     } on Object catch (error) {
       errorMessage = _message(error);
       notifyListeners();
@@ -329,6 +427,7 @@ class ChatController extends ChangeNotifier {
     }
     try {
       await client.deleteConversation(active.id);
+      pinnedConversationIds.remove(active.id);
       await newChat(keepContext: activeProject != null || activeGpt != null);
       await refreshConversations();
     } on Object catch (error) {
@@ -426,6 +525,7 @@ class ChatController extends ChangeNotifier {
         mode: selectedMode,
         projectId: activeProject?.id,
         gizmoId: activeGpt?.id,
+        app: selectedApp,
         temporary: temporaryChat,
         attachmentIds: attachmentIds,
         libraryFiles: libraryFiles,
@@ -468,6 +568,7 @@ class ChatController extends ChangeNotifier {
       streamingText = '';
       temporaryChat = false;
       await refreshConversations();
+      await refreshPins(silent: true);
       final id = activeConversation?.id ?? completedConversationId;
       if (id != null && id.isNotEmpty) {
         _startBackgroundEvents(id);
@@ -476,8 +577,8 @@ class ChatController extends ChangeNotifier {
       await _persistCache();
     } on Object catch (error) {
       errorMessage = _message(error);
-      // Do not fake a completed assistant response. Keep any streamed text on
-      // screen so the user can see what arrived before the transport failed.
+      // Keep partial streamed output visible. A failed transport must never be
+      // represented as a fabricated completed assistant response.
     } finally {
       sending = false;
       notifyListeners();
@@ -575,15 +676,285 @@ class ChatController extends ChangeNotifier {
         messageId: message.id,
       );
       activeProject = null;
+      activeProjectFiles = const <ProjectFile>[];
       activeGpt = null;
       sidebarSection = SidebarSection.chats;
       await refreshConversations();
+      await refreshPins(silent: true);
       await _persistCache();
     } on Object catch (error) {
       errorMessage = _message(error);
     } finally {
       loadingConversation = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> runBlockAction(
+    ChatMessage message,
+    String action, {
+    String? text,
+  }) async {
+    final active = activeConversation;
+    if (active == null || message.id.isEmpty || sending || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      activeConversation = await actions.blockAction(
+        conversationId: active.id,
+        messageId: message.id,
+        action: action,
+        text: text,
+      );
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> sendFeedback(ChatMessage message, String rating) async {
+    final active = activeConversation;
+    if (active == null || message.id.isEmpty || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      await actions.feedback(
+        conversationId: active.id,
+        messageId: message.id,
+        rating: rating,
+      );
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshPins({bool silent = false}) async {
+    try {
+      pinnedConversationIds = await actions.pinnedConversationIds();
+      notifyListeners();
+    } on Object catch (error) {
+      if (!silent) {
+        errorMessage = _message(error);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> toggleActivePin() async {
+    final active = activeConversation;
+    if (active == null || parityActionBusy) {
+      return;
+    }
+    final next = !pinnedConversationIds.contains(active.id);
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      await actions.setPinned(active.id, next);
+      if (next) {
+        pinnedConversationIds.add(active.id);
+      } else {
+        pinnedConversationIds.remove(active.id);
+      }
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<ShareResult?> shareActiveConversation() async {
+    final active = activeConversation;
+    if (active == null || parityActionBusy) {
+      return null;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      activeShare = await actions.shareConversation(active.id);
+      return activeShare;
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      return null;
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteActiveShare() async {
+    final share = activeShare;
+    if (share == null || share.id.isEmpty || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      await actions.deleteShare(share.id);
+      activeShare = null;
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<MemoryItem>> loadMemories() async {
+    loadingMemories = true;
+    notifyListeners();
+    try {
+      memoryItems = await actions.memories();
+      return memoryItems;
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      return memoryItems;
+    } finally {
+      loadingMemories = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createMemory(String content) async {
+    final clean = content.trim();
+    if (clean.isEmpty || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      final created = await actions.createMemory(clean);
+      memoryItems = <MemoryItem>[...memoryItems, created];
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteMemory(String memoryId) async {
+    if (memoryId.isEmpty || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      await actions.deleteMemory(memoryId);
+      memoryItems = memoryItems
+          .where((MemoryItem item) => item.id != memoryId)
+          .toList(growable: false);
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<ProjectSummary?> createProject({
+    required String name,
+    String instructions = '',
+  }) async {
+    final clean = name.trim();
+    if (clean.isEmpty || parityActionBusy) {
+      return null;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      final project = await actions.createProject(
+        name: clean,
+        instructions: instructions.trim(),
+      );
+      projects = <ProjectSummary>[project, ...projects];
+      return project;
+    } on Object catch (error) {
+      errorMessage = _message(error);
+      return null;
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateActiveProjectInstructions(String instructions) async {
+    final project = activeProject;
+    if (project == null || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      final updated = await actions.updateProjectInstructions(
+        project.id,
+        instructions.trim(),
+      );
+      activeProject = updated;
+      projects = projects
+          .map((ProjectSummary item) => item.id == updated.id ? updated : item)
+          .toList(growable: false);
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteActiveProject() async {
+    final project = activeProject;
+    if (project == null || parityActionBusy) {
+      return;
+    }
+    parityActionBusy = true;
+    notifyListeners();
+    try {
+      await actions.deleteProject(project.id);
+      projects = projects
+          .where((ProjectSummary item) => item.id != project.id)
+          .toList(growable: false);
+      activeProject = null;
+      activeProjectFiles = const <ProjectFile>[];
+      activeConversation = null;
+      conversations = const <ConversationSummary>[];
+      sidebarSection = SidebarSection.projects;
+      await _persistCache();
+    } on Object catch (error) {
+      errorMessage = _message(error);
+    } finally {
+      parityActionBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<ProjectFile>> loadActiveProjectFiles({bool silent = false}) async {
+    final project = activeProject;
+    if (project == null) {
+      activeProjectFiles = const <ProjectFile>[];
+      return activeProjectFiles;
+    }
+    try {
+      activeProjectFiles = await actions.projectFiles(project.id);
+      notifyListeners();
+      return activeProjectFiles;
+    } on Object catch (error) {
+      if (!silent) {
+        errorMessage = _message(error);
+        notifyListeners();
+      }
+      return activeProjectFiles;
     }
   }
 
@@ -634,6 +1005,20 @@ class ChatController extends ChangeNotifier {
 
   void setMode(String value) {
     selectedMode = value;
+    if (value != 'normal') {
+      selectedApp = null;
+    }
+    notifyListeners();
+    unawaited(_persistCache());
+  }
+
+  void setApp(String? value) {
+    selectedApp = value == null || value == 'none' || value.trim().isEmpty
+        ? null
+        : value.trim();
+    if (selectedApp != null) {
+      selectedMode = 'normal';
+    }
     notifyListeners();
     unawaited(_persistCache());
   }
@@ -667,6 +1052,9 @@ class ChatController extends ChangeNotifier {
     }
     if (!availableModes.contains(selectedMode)) {
       selectedMode = 'normal';
+    }
+    if (selectedApp != null && !appLabels.contains(selectedApp)) {
+      selectedApp = null;
     }
   }
 
@@ -719,9 +1107,11 @@ class ChatController extends ChangeNotifier {
     await subscription?.cancel();
   }
 
-  void _replaceClient() {
+  void _replaceClients() {
     _client?.close();
+    _actionsApi?.close();
     _client = BridgeClient(settings);
+    _actionsApi = ParityActionsApi(settings);
   }
 
   Future<void> _restoreCache() async {
@@ -752,6 +1142,10 @@ class ChatController extends ChangeNotifier {
     final cachedMode = cache['selected_mode']?.toString();
     if (cachedMode != null && cachedMode.isNotEmpty) {
       selectedMode = cachedMode;
+    }
+    final cachedApp = cache['selected_app']?.toString();
+    if (cachedApp != null && cachedApp.isNotEmpty) {
+      selectedApp = cachedApp;
     }
     final projectId = cache['active_project_id']?.toString();
     final projectName = cache['active_project_name']?.toString();
@@ -787,8 +1181,19 @@ class ChatController extends ChangeNotifier {
       'selected_model': selectedModel,
       'selected_reasoning': selectedReasoningLevel,
       'selected_mode': selectedMode,
+      'selected_app': selectedApp,
       'cached_at': DateTime.now().toUtc().toIso8601String(),
     });
+  }
+
+  bool _isBuiltInModeLabel(String label) {
+    final value = label.toLowerCase();
+    return value.contains('search') ||
+        value.contains('create image') ||
+        value.contains('image generation') ||
+        value.contains('deep research') ||
+        value == 'research' ||
+        value.contains('study');
   }
 
   String _message(Object error) {
@@ -805,6 +1210,7 @@ class ChatController extends ChangeNotifier {
   void dispose() {
     unawaited(_backgroundSubscription?.cancel());
     _client?.close();
+    _actionsApi?.close();
     super.dispose();
   }
 }
