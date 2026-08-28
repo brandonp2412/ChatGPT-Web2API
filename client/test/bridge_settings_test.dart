@@ -1,5 +1,5 @@
-import 'package:chatgpt_bridge_client/src/api/bridge_client.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sloppa/src/api/bridge_client.dart';
 
 void main() {
   group('BridgeSettings', () {
