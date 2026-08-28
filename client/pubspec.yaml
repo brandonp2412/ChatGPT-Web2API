@@ -1,5 +1,5 @@
-name: chatgpt_bridge_client
-description: Native Flutter client for ChatGPT-Web2API subscription-backed chat.
+name: sloppa
+description: Native Flutter client for Sloppa-Backend subscription-backed ChatGPT chat.
 publish_to: none
 version: 0.1.0+1
 
