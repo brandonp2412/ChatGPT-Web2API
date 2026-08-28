@@ -10,11 +10,15 @@ void main() {
       pageSize: 100,
       loadPage: (int offset, int limit) async {
         calls++;
-        final end = (offset + limit).clamp(0, total);
         if (offset >= total) {
           return const <String>[];
         }
-        return List<String>.generate(end - offset, (int i) => '${offset + i}');
+        final candidate = offset + limit;
+        final end = candidate < total ? candidate : total;
+        return List<String>.generate(
+          end - offset,
+          (int i) => '${offset + i}',
+        );
       },
       idOf: (String item) => item,
     );
@@ -44,8 +48,14 @@ void main() {
   test('cursor pagination follows every cursor and de-duplicates items', () async {
     final requested = <String>[];
     final pages = <String, CursorPage<String>>{
-      '0': const CursorPage<String>(items: <String>['a', 'b'], nextCursor: 'c1'),
-      'c1': const CursorPage<String>(items: <String>['b', 'c'], nextCursor: 'c2'),
+      '0': const CursorPage<String>(
+        items: <String>['a', 'b'],
+        nextCursor: 'c1',
+      ),
+      'c1': const CursorPage<String>(
+        items: <String>['b', 'c'],
+        nextCursor: 'c2',
+      ),
       'c2': const CursorPage<String>(items: <String>['d']),
     };
 
