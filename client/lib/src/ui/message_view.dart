@@ -502,17 +502,18 @@ class MessageView extends StatelessWidget {
 class ResearchReportView extends StatelessWidget {
   const ResearchReportView({
     required this.report,
-    required this.settings,
+    this.settings,
     this.conversationId,
     super.key,
   });
 
   final ResearchReport report;
-  final BridgeSettings settings;
+  final BridgeSettings? settings;
   final String? conversationId;
 
   @override
   Widget build(BuildContext context) {
+    final bridgeSettings = settings;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
       child: ConstrainedBox(
@@ -542,15 +543,24 @@ class ResearchReportView extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: report.assets.map((ChatAsset asset) {
+                      if (bridgeSettings == null) {
+                        return Chip(
+                          avatar: Icon(
+                            asset.isImage ? Icons.image_outlined : Icons.attach_file,
+                            size: 16,
+                          ),
+                          label: Text(asset.fileName ?? 'Research attachment'),
+                        );
+                      }
                       if (asset.isImage) {
                         return BridgeAssetImage(
-                          settings: settings,
+                          settings: bridgeSettings,
                           asset: asset,
                           conversationId: conversationId,
                         );
                       }
                       return BridgeAssetDownloadButton(
-                        settings: settings,
+                        settings: bridgeSettings,
                         asset: asset,
                         conversationId: conversationId,
                       );
