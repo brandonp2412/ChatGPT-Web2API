@@ -1,10 +1,10 @@
 import 'dart:convert';
 
-import 'package:chatgpt_bridge_client/src/api/bridge_client.dart';
-import 'package:chatgpt_bridge_client/src/api/parity_actions_api.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:sloppa/src/api/bridge_client.dart';
+import 'package:sloppa/src/api/parity_actions_api.dart';
 
 void main() {
   test('conversation IDs are encoded exactly once and auth stays on bridge', () async {
