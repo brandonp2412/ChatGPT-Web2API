@@ -38,8 +38,13 @@ Future<CursorPage<ConversationSummary>> _loadProjectPage({
 }) async {
   final base = settings.baseUri;
   final uri = base.replace(
-    path: '${base.path}/v1/projects/${Uri.encodeComponent(projectId)}/conversations'
-        .replaceAll('//', '/'),
+    pathSegments: <String>[
+      ...base.pathSegments.where((String segment) => segment.isNotEmpty),
+      'v1',
+      'projects',
+      projectId,
+      'conversations',
+    ],
     queryParameters: <String, String>{'cursor': cursor},
   );
   final response = await client.get(
