@@ -115,5 +115,5 @@ jobs:
       - name: Check package
         run: |
           pip install dist/*.whl
-          sloppa-backend --help
-          sloppa-backend-mcp --help
+          sloppa --help
+          sloppa-mcp --help
