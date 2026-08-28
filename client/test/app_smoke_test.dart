@@ -5,13 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('full app shell renders before initialization', (WidgetTester tester) async {
-    final controller = ChatController(store: SecureStore());
-    await tester.pumpWidget(ChatBridgeApp(controller: controller));
+  testWidgets(
+    'full app shell renders before initialization',
+    (WidgetTester tester) async {
+      final controller = ChatController(store: SecureStore());
+      await tester.pumpWidget(ChatBridgeApp(controller: controller));
 
-    expect(find.byType(MaterialApp), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(MaterialApp), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    controller.dispose();
-  });
+      controller.dispose();
+    },
+  );
 }
