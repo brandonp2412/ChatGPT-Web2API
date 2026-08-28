@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -7,7 +9,14 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../api/bridge_client.dart';
 import 'voice_api.dart';
 
-enum VoiceSessionState { idle, requestingMicrophone, negotiating, connected, failed, ended }
+enum VoiceSessionState {
+  idle,
+  requestingMicrophone,
+  negotiating,
+  connected,
+  failed,
+  ended,
+}
 
 class VoiceSession extends ChangeNotifier {
   VoiceSession({
@@ -33,6 +42,7 @@ class VoiceSession extends ChangeNotifier {
   final String? conversationId;
   final String? projectId;
   final VoiceApi _api;
+  final Random _random = Random.secure();
 
   String voice;
   VoiceSessionState state = VoiceSessionState.idle;
@@ -41,6 +51,7 @@ class VoiceSession extends ChangeNotifier {
   String? lastEventType;
   String? transcript;
   bool muted = false;
+  bool sendingRelay = false;
 
   RTCPeerConnection? _peer;
   MediaStream? _localStream;
@@ -51,6 +62,9 @@ class VoiceSession extends ChangeNotifier {
   bool get active => state == VoiceSessionState.requestingMicrophone ||
       state == VoiceSessionState.negotiating ||
       state == VoiceSessionState.connected;
+
+  bool get relayReady => state == VoiceSessionState.connected &&
+      _dataChannel?.state == RTCDataChannelState.RTCDataChannelOpen;
 
   Future<void> start() async {
     if (active || _disposed) {
@@ -89,10 +103,21 @@ class VoiceSession extends ChangeNotifier {
         }
       };
 
-      final dataInit = RTCDataChannelInit()..ordered = true;
+      // ChatGPT Web Voice uses negotiated DataChannel id 0. Creating a normal
+      // in-band channel can work in some browsers but does not match the web
+      // client's realtime transport contract.
+      final dataInit = RTCDataChannelInit()
+        ..ordered = true
+        ..negotiated = true
+        ..id = 0;
       final dataChannel = await peer.createDataChannel('oai-events', dataInit);
       _dataChannel = dataChannel;
       dataChannel.onMessage = _onDataMessage;
+      dataChannel.onDataChannelState = (RTCDataChannelState _) {
+        if (!_disposed) {
+          notifyListeners();
+        }
+      };
 
       for (final track in local.getAudioTracks()) {
         await peer.addTrack(track, local);
@@ -137,6 +162,83 @@ class VoiceSession extends ChangeNotifier {
     }
   }
 
+  Future<void> sendText(String text) async {
+    final clean = text.trim();
+    if (clean.isEmpty || sendingRelay) {
+      return;
+    }
+    sendingRelay = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await _sendRelayMessage(_baseUserMessage(<String, dynamic>{
+        'content_type': 'text',
+        'parts': <String>[clean],
+      }));
+    } on Object catch (error) {
+      errorMessage = _errorText(error);
+      rethrow;
+    } finally {
+      sendingRelay = false;
+      if (!_disposed) {
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> sendImage(File file, {String text = ''}) async {
+    if (sendingRelay) {
+      return;
+    }
+    sendingRelay = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      final attachment = await _api.uploadImage(file);
+      final parts = <dynamic>[
+        <String, dynamic>{
+          'content_type': 'image_asset_pointer',
+          'asset_pointer': attachment.assetPointer,
+          'size_bytes': attachment.size,
+          'width': attachment.width,
+          'height': attachment.height,
+        },
+        if (text.trim().isNotEmpty) text.trim(),
+      ];
+      final message = _baseUserMessage(<String, dynamic>{
+        'content_type': 'multimodal_text',
+        'parts': parts,
+      });
+      (message['metadata'] as Map<String, dynamic>)['attachments'] =
+          <Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': attachment.fileId,
+          'size': attachment.size,
+          'name': attachment.name,
+          'mimeType': attachment.mimeType,
+          'width': attachment.width,
+          'height': attachment.height,
+        },
+      ];
+      await _sendRelayMessage(message);
+    } on Object catch (error) {
+      errorMessage = _errorText(error);
+      rethrow;
+    } finally {
+      sendingRelay = false;
+      if (!_disposed) {
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> interrupt() async {
+    await _sendDataEvent(<String, dynamic>{
+      'type': 'action_request',
+      'payload': <String, dynamic>{'action': 'stop_speaking'},
+    });
+  }
+
   Future<void> setMuted(bool value) async {
     muted = value;
     final stream = _localStream;
@@ -155,6 +257,57 @@ class VoiceSession extends ChangeNotifier {
     await _closeTransport();
     state = VoiceSessionState.ended;
     notifyListeners();
+  }
+
+  Future<void> _sendRelayMessage(Map<String, dynamic> message) {
+    return _sendDataEvent(<String, dynamic>{
+      'type': 'relay_message',
+      'payload': <String, dynamic>{
+        'type': 'relay_message',
+        'message': message,
+      },
+    });
+  }
+
+  Future<void> _sendDataEvent(Map<String, dynamic> event) async {
+    final channel = _dataChannel;
+    if (channel == null ||
+        channel.state != RTCDataChannelState.RTCDataChannelOpen) {
+      throw const BridgeException('Live Voice data channel is not ready');
+    }
+    final envelope = <String, dynamic>{
+      'type': 'data_message',
+      'data': jsonEncode(event),
+    };
+    await channel.send(RTCDataChannelMessage(jsonEncode(envelope)));
+  }
+
+  Map<String, dynamic> _baseUserMessage(Map<String, dynamic> content) {
+    return <String, dynamic>{
+      'id': _uuidV4(),
+      'author': <String, dynamic>{'role': 'user'},
+      'create_time': DateTime.now().millisecondsSinceEpoch / 1000,
+      'content': content,
+      'metadata': <String, dynamic>{
+        'serialization_metadata': <String, dynamic>{
+          'custom_symbol_offsets': <dynamic>[],
+        },
+      },
+      'clientMetadata': <String, dynamic>{'isOptimistic': true},
+    };
+  }
+
+  String _uuidV4() {
+    final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String hex(int value) => value.toRadixString(16).padLeft(2, '0');
+    final value = bytes.map(hex).join();
+    return '${value.substring(0, 8)}-'
+        '${value.substring(8, 12)}-'
+        '${value.substring(12, 16)}-'
+        '${value.substring(16, 20)}-'
+        '${value.substring(20)}';
   }
 
   void _onConnectionState(RTCPeerConnectionState connectionState) {
@@ -192,7 +345,13 @@ class VoiceSession extends ChangeNotifier {
       return;
     }
     try {
-      final decoded = jsonDecode(text);
+      var decoded = jsonDecode(text);
+      if (decoded is Map && decoded['type'] == 'data_message') {
+        final inner = decoded['data'];
+        if (inner is String) {
+          decoded = jsonDecode(inner);
+        }
+      }
       if (decoded is Map) {
         final event = decoded.cast<String, dynamic>();
         lastEventType = event['type']?.toString();
@@ -214,6 +373,13 @@ class VoiceSession extends ChangeNotifier {
         return value.trim();
       }
     }
+    final payload = event['payload'];
+    if (payload is Map) {
+      final nested = _findTranscript(payload.cast<String, dynamic>());
+      if (nested != null) {
+        return nested;
+      }
+    }
     final item = event['item'];
     if (item is Map) {
       final content = item['content'];
@@ -221,14 +387,28 @@ class VoiceSession extends ChangeNotifier {
         final parts = <String>[];
         for (final entry in content) {
           if (entry is Map) {
-            final transcript = entry['transcript'] ?? entry['text'];
-            if (transcript is String && transcript.trim().isNotEmpty) {
-              parts.add(transcript.trim());
+            final value = entry['transcript'] ?? entry['text'];
+            if (value is String && value.trim().isNotEmpty) {
+              parts.add(value.trim());
             }
           }
         }
         if (parts.isNotEmpty) {
           return parts.join('\n');
+        }
+      }
+    }
+    final message = event['message'];
+    if (message is Map && message['content'] is Map) {
+      final content = message['content'] as Map;
+      final parts = content['parts'];
+      if (parts is List) {
+        final textParts = parts
+            .whereType<String>()
+            .where((String part) => part.trim().isNotEmpty)
+            .toList(growable: false);
+        if (textParts.isNotEmpty) {
+          return textParts.join('\n');
         }
       }
     }
@@ -251,8 +431,8 @@ class VoiceSession extends ChangeNotifier {
       await completer.future.timeout(const Duration(seconds: 5));
     } on TimeoutException {
       // Host candidates are often already present in the local description.
-      // Continue rather than failing a voice call solely on a missing complete
-      // callback; ChatGPT's SDP answer will reject an unusable offer cleanly.
+    } finally {
+      peer.onIceGatheringState = null;
     }
   }
 
