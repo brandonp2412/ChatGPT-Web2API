@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class Service:
-    """ChatGPT-Web2API service."""
+    """Sloppa-Backend service."""
 
     def __init__(self, config: Config) -> None:
         self._config = config
@@ -222,7 +222,7 @@ class Service:
 
         print()
         print("=" * 52)
-        print("       ChatGPT-Web2API -- CDP Proxy")
+        print("          Sloppa-Backend -- CDP Proxy")
         print("=" * 52)
         print()
         print(f"  Chrome:   PID running on CDP port {cfg.chrome.cdp_port}")
