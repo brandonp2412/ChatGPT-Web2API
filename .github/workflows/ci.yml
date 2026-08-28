@@ -5,6 +5,7 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Keep this workflow present on the default branch so fork Actions can register it.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
