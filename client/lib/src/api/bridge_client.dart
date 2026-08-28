@@ -34,6 +34,12 @@ class BridgeSettings {
     if (uri == null || uri.host.isEmpty) {
       return 'Enter a valid bridge URL';
     }
+    if (uri.userInfo.isNotEmpty) {
+      return 'Bridge URLs must not contain embedded credentials';
+    }
+    if (uri.hasQuery || uri.hasFragment) {
+      return 'Bridge URLs must not contain a query or fragment';
+    }
     if (uri.scheme == 'https') {
       return null;
     }
@@ -96,7 +102,6 @@ class BridgeClient {
       };
 
   Uri _uri(String path, [Map<String, String?> query = const <String, String?>{}]) {
-    final base = settings.baseUri;
     final filtered = <String, String>{};
     for (final entry in query.entries) {
       final value = entry.value;
@@ -104,10 +109,14 @@ class BridgeClient {
         filtered[entry.key] = value;
       }
     }
-    return base.replace(
-      path: '${base.path}$path'.replaceAll('//', '/'),
-      queryParameters: filtered.isEmpty ? null : filtered,
-    );
+
+    // Dynamic path segments are encoded at the call site with encodeComponent.
+    // Parsing the already-encoded joined URI preserves those escapes. Passing
+    // the same string through Uri.replace(path: ...) would escape '%' again.
+    final root = BridgeSettings.normalizedBaseUrl(settings.baseUrl);
+    final suffix = path.startsWith('/') ? path : '/$path';
+    final uri = Uri.parse('$root$suffix');
+    return filtered.isEmpty ? uri : uri.replace(queryParameters: filtered);
   }
 
   Future<Map<String, dynamic>> health() => _getMap('/health');
