@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:
@@ -63,6 +63,9 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Generate Android runner
+        working-directory: client
+        run: flutter create --platforms=android --project-name chatgpt_bridge_client .
       - name: Install client dependencies
         working-directory: client
         run: flutter pub get
@@ -75,6 +78,9 @@ jobs:
       - name: Test client
         working-directory: client
         run: flutter test
+      - name: Build Android debug APK
+        working-directory: client
+        run: flutter build apk --debug
 
   build:
     runs-on: ubuntu-latest
