@@ -13,7 +13,13 @@ void main() {
       expect(request.url.scheme, 'https');
       expect(request.url.host, 'bridge.example');
       expect(request.headers['Authorization'], 'Bearer secret');
-      expect(request.url.path, '/api/v1/projects/project%201/conversations');
+      expect(
+        request.url.toString(),
+        startsWith(
+          'https://bridge.example/api/v1/projects/project%201/conversations?cursor=',
+        ),
+      );
+      expect(request.url.toString(), isNot(contains('%2520')));
       final cursor = request.url.queryParameters['cursor']!;
       cursors.add(cursor);
 
