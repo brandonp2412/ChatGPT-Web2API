@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -43,50 +45,13 @@ class _BridgeAssetImageState extends State<BridgeAssetImage> {
     }
   }
 
-  Future<Uint8List> _load() async {
-    final uri = _assetUri();
-    final response = await http.get(
-      uri,
-      headers: <String, String>{
-        'Accept': 'image/*,*/*;q=0.8',
-        if (widget.settings.apiKey.trim().isNotEmpty)
-          'Authorization': 'Bearer ${widget.settings.apiKey.trim()}',
-      },
+  Future<Uint8List> _load() {
+    return _fetchAssetBytes(
+      settings: widget.settings,
+      asset: widget.asset,
+      conversationId: widget.conversationId,
+      accept: 'image/*,*/*;q=0.8',
     );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw BridgeException(
-        'Image load failed (HTTP ${response.statusCode})',
-        statusCode: response.statusCode,
-      );
-    }
-    return response.bodyBytes;
-  }
-
-  Uri _assetUri() {
-    final pointer = widget.asset.pointer;
-    if (pointer != null && pointer.isNotEmpty) {
-      final base = widget.settings.baseUri;
-      final segments = <String>[
-        ...base.pathSegments.where((String part) => part.isNotEmpty),
-        'v1',
-        'assets',
-        pointer,
-      ];
-      return base.replace(
-        pathSegments: segments,
-        queryParameters: <String, String>{
-          if (widget.conversationId?.isNotEmpty == true)
-            'conversation_id': widget.conversationId!,
-          'inline': '1',
-        },
-      );
-    }
-    final direct = widget.asset.url;
-    final uri = direct == null ? null : Uri.tryParse(direct);
-    if (uri == null || uri.scheme != 'https') {
-      throw const BridgeException('Image asset has no safe download location');
-    }
-    return uri;
   }
 
   @override
@@ -120,12 +85,6 @@ class _BridgeAssetImageState extends State<BridgeAssetImage> {
             ),
           );
         }
-        final image = Image.memory(
-          bytes,
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-        );
         return InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _showFullImage(context, bytes),
@@ -133,7 +92,12 @@ class _BridgeAssetImageState extends State<BridgeAssetImage> {
             borderRadius: BorderRadius.circular(12),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640, maxHeight: 640),
-              child: image,
+              child: Image.memory(
+                bytes,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+              ),
             ),
           ),
         );
@@ -170,4 +134,168 @@ class _BridgeAssetImageState extends State<BridgeAssetImage> {
       ),
     );
   }
+}
+
+class BridgeAssetDownloadButton extends StatefulWidget {
+  const BridgeAssetDownloadButton({
+    required this.settings,
+    required this.asset,
+    this.conversationId,
+    super.key,
+  });
+
+  final BridgeSettings settings;
+  final ChatAsset asset;
+  final String? conversationId;
+
+  @override
+  State<BridgeAssetDownloadButton> createState() =>
+      _BridgeAssetDownloadButtonState();
+}
+
+class _BridgeAssetDownloadButtonState extends State<BridgeAssetDownloadButton> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.asset.fileName ?? 'Attachment';
+    return ActionChip(
+      avatar: _saving
+          ? const SizedBox(
+              width: 15,
+              height: 15,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.download_outlined, size: 16),
+      label: Text(name),
+      onPressed: _saving ? null : _save,
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final bytes = await _fetchAssetBytes(
+        settings: widget.settings,
+        asset: widget.asset,
+        conversationId: widget.conversationId,
+      );
+      if (!mounted) {
+        return;
+      }
+      final suggested = _safeFileName(widget.asset.fileName ?? 'attachment');
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save attachment',
+        fileName: suggested,
+      );
+      if (path == null || path.isEmpty) {
+        return;
+      }
+      await File(path).writeAsBytes(bytes, flush: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attachment saved')),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save attachment: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+}
+
+Future<Uint8List> _fetchAssetBytes({
+  required BridgeSettings settings,
+  required ChatAsset asset,
+  String? conversationId,
+  String accept = '*/*',
+}) async {
+  final resolved = _assetUri(
+    settings: settings,
+    asset: asset,
+    conversationId: conversationId,
+  );
+  final bridge = settings.baseUri;
+  final sameBridge = resolved.scheme == bridge.scheme &&
+      resolved.host == bridge.host &&
+      resolved.port == bridge.port;
+  final response = await http.get(
+    resolved,
+    headers: <String, String>{
+      'Accept': accept,
+      if (sameBridge && settings.apiKey.trim().isNotEmpty)
+        'Authorization': 'Bearer ${settings.apiKey.trim()}',
+    },
+  );
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw BridgeException(
+      'Asset load failed (HTTP ${response.statusCode})',
+      statusCode: response.statusCode,
+    );
+  }
+  return response.bodyBytes;
+}
+
+Uri _assetUri({
+  required BridgeSettings settings,
+  required ChatAsset asset,
+  String? conversationId,
+}) {
+  final pointer = asset.pointer;
+  if (pointer != null && pointer.isNotEmpty) {
+    final base = settings.baseUri;
+    final segments = <String>[
+      ...base.pathSegments.where((String part) => part.isNotEmpty),
+      'v1',
+      'assets',
+      pointer,
+    ];
+    return base.replace(
+      pathSegments: segments,
+      queryParameters: <String, String>{
+        if (conversationId?.isNotEmpty == true)
+          'conversation_id': conversationId!,
+        'inline': '1',
+      },
+    );
+  }
+  final direct = asset.url;
+  final uri = direct == null ? null : Uri.tryParse(direct);
+  if (uri == null || !_isAllowedDirectAssetUri(uri)) {
+    throw const BridgeException('Asset has no safe download location');
+  }
+  return uri;
+}
+
+bool _isAllowedDirectAssetUri(Uri uri) {
+  if (uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.host.isEmpty) {
+    return false;
+  }
+  final host = uri.host.toLowerCase();
+  if (host == 'oaidalleapiprodscus.blob.core.windows.net') {
+    return true;
+  }
+  const suffixes = <String>[
+    'oaiusercontent.com',
+    'oaistatic.com',
+    'chatgpt.com',
+    'openai.com',
+  ];
+  return suffixes.any(
+    (String suffix) => host == suffix || host.endsWith('.$suffix'),
+  );
+}
+
+String _safeFileName(String value) {
+  final clean = value
+      .replaceAll(RegExp(r'[\\/:*?"<>|\u0000-\u001f]'), '_')
+      .trim();
+  return clean.isEmpty ? 'attachment' : clean;
 }
