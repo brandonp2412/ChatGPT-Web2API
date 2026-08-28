@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from aiohttp import web
 
-from .parity_browser import StoredAttachment
+from .parity_browser import ParityBrowserError, StoredAttachment
 from .parity_policy_api import PolicyParityAPIServer
 from .parity_secure_api import _client_view
 
@@ -42,6 +43,73 @@ class PrivacyParityAPIServer(PolicyParityAPIServer):
             return web.json_response(
                 {"object": "conversation", "data": _client_view(raw)}
             )
+        except Exception as exc:
+            return self._parity_error(exc)
+
+    async def _handle_conversation_patch(self, request: web.Request) -> web.Response:
+        response = await super()._handle_conversation_patch(request)
+        return await self._sanitize_mutation_conversation(
+            response,
+            fallback_conversation_id=request.match_info["conversation_id"],
+            field="data",
+        )
+
+    async def _handle_message_action(self, request: web.Request) -> web.Response:
+        response = await super()._handle_message_action(request)
+        return await self._sanitize_mutation_conversation(
+            response,
+            fallback_conversation_id=request.match_info["conversation_id"],
+            field="data",
+        )
+
+    async def _handle_block_action(self, request: web.Request) -> web.Response:
+        response = await super()._handle_block_action(request)
+        return await self._sanitize_mutation_conversation(
+            response,
+            fallback_conversation_id=request.match_info["conversation_id"],
+            field="conversation",
+        )
+
+    async def _sanitize_mutation_conversation(
+        self,
+        response: web.Response,
+        *,
+        fallback_conversation_id: str,
+        field: str,
+    ) -> web.Response:
+        """Replace mutation snapshots with the same filtered view as GET.
+
+        Several lower parity layers predate the final privacy boundary and
+        return ``normalize_conversation(raw)`` after a mutation. That shape can
+        retain visually-hidden/internal nodes. Responses have not been written
+        to the network yet, so parse the in-memory response and replace only the
+        conversation payload with a freshly fetched client-safe projection.
+        Fail closed if the safe projection cannot be produced.
+        """
+        if response.status < 200 or response.status >= 300:
+            return response
+        try:
+            body = response.body
+            if not isinstance(body, (bytes, bytearray)):
+                raise ParityBrowserError("Mutation response had no JSON body")
+            payload = json.loads(bytes(body).decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise ParityBrowserError("Mutation response was not an object")
+            candidate = payload.get(field)
+            conversation_id = fallback_conversation_id
+            if isinstance(candidate, dict):
+                conversation_id = str(
+                    candidate.get("id")
+                    or candidate.get("conversation_id")
+                    or conversation_id
+                )
+            raw = await self._rich_conversation.fetch(conversation_id)
+            if not raw:
+                raise ParityBrowserError(
+                    "Could not obtain privacy-filtered mutation snapshot"
+                )
+            payload[field] = _client_view(raw)
+            return web.json_response(payload, status=response.status)
         except Exception as exc:
             return self._parity_error(exc)
 
