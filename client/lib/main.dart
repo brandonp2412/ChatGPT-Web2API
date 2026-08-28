@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'src/state/chat_controller.dart';
 import 'src/storage/secure_store.dart';
 import 'src/ui/chat_home.dart';
+import 'src/voice/voice_overlay.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +37,10 @@ class ChatBridgeApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: ChatHome(controller: controller),
+      home: VoiceOverlay(
+        controller: controller,
+        child: ChatHome(controller: controller),
+      ),
     );
   }
 }
