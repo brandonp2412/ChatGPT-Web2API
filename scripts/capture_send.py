@@ -55,7 +55,7 @@ async def main(listen_seconds: int) -> None:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
                 return json.loads(raw)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return None
 
         deadline = asyncio.get_event_loop().time() + listen_seconds

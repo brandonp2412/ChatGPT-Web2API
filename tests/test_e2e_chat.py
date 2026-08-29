@@ -4,16 +4,16 @@ These create real conversations (and possibly a memory) but register every
 created id in ``e2e_created`` so the session cleanup finalizer removes them
 even on crash. Nothing here is irreversible.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_chat.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_chat.py -m e2e -v
 """
 
 import uuid
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.mcp_server import (
+from sloppa.cdp_driver import CDPDriver
+from sloppa.config import Config
+from sloppa.mcp_server import (
     do_archive_conversation,
     do_chat_completion,
     do_chat_with_gpt,
@@ -34,7 +34,7 @@ async def test_chat_completion_creates_then_archives(
     e2e_driver: CDPDriver, e2e_app_config: Config, e2e_created: dict
 ):
     """Send a real message, capture the conversation, archive it (reversible)."""
-    marker = f"W2A-E2E-OK-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-OK-{uuid.uuid4().hex[:6]}"
     result = await do_chat_completion(
         e2e_driver,
         {"message": f"Reply with exactly this token and nothing else: {marker}"},
@@ -62,7 +62,7 @@ async def test_get_conversation_reads_back_chat(
     e2e_driver: CDPDriver, e2e_app_config: Config, e2e_created: dict
 ):
     """A conversation we create is readable with both turns present."""
-    marker = f"W2A-E2E-READBACK-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-READBACK-{uuid.uuid4().hex[:6]}"
     chat = await do_chat_completion(
         e2e_driver, {"message": f"Reply with exactly: {marker}"}, e2e_app_config
     )
@@ -114,7 +114,7 @@ async def test_create_memory_then_cleanup(
     """
     before = {m["id"] for m in (await do_list_memories(e2e_driver))["memories"]}
 
-    marker = f"W2A-E2E-MEM-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-MEM-{uuid.uuid4().hex[:6]}"
     result = await do_create_memory(e2e_driver, {"content": marker})
     # create_memory always returns content + the conversation it used
     assert result["content"] == marker
@@ -147,7 +147,7 @@ async def test_update_project_instructions_reversible(
         pytest.skip("no projects available to test update_project_instructions")
     pid = projects[0]["id"]
 
-    marker = f"W2A-E2E-INSTR-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-INSTR-{uuid.uuid4().hex[:6]}"
     upd = await do_update_project_instructions(
         e2e_driver, {"project_id": pid, "instructions": marker}
     )

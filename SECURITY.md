@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ChatGPT-Web2API, please report it responsibly:
+If you discover a security vulnerability in Sloppa, please report it responsibly:
 
 1. **Do not open a public issue** for security vulnerabilities
 2. Email security concerns to the maintainers via GitHub's private vulnerability reporting

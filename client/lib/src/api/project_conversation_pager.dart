@@ -14,7 +14,7 @@ Future<List<ConversationSummary>> loadAllProjectConversations({
   final ownedClient = httpClient == null;
   final client = httpClient ?? http.Client();
   try {
-    return collectCursorPages<ConversationSummary>(
+    return await collectCursorPages<ConversationSummary>(
       loadPage: (String cursor) => _loadProjectPage(
         client: client,
         settings: settings,
@@ -78,7 +78,8 @@ Future<CursorPage<ConversationSummary>> _loadProjectPage({
   final items = _conversationSummaries(
     data['items'] ?? data['conversations'] ?? data['data'],
   );
-  final dynamic cursorValue = data['next_cursor'] ??
+  final dynamic cursorValue =
+      data['next_cursor'] ??
       data['nextCursor'] ??
       data['cursor'] ??
       data['next'];
@@ -92,12 +93,12 @@ Future<CursorPage<ConversationSummary>> _loadProjectPage({
 List<ConversationSummary> _conversationSummaries(dynamic raw) {
   return raw is List
       ? raw
-          .whereType<Map>()
-          .map(
-            (Map item) =>
-                ConversationSummary.fromJson(item.cast<String, dynamic>()),
-          )
-          .where((ConversationSummary item) => item.id.isNotEmpty)
-          .toList(growable: false)
+            .whereType<Map<Object?, Object?>>()
+            .map(
+              (Map<Object?, Object?> item) =>
+                  ConversationSummary.fromJson(item.cast<String, dynamic>()),
+            )
+            .where((ConversationSummary item) => item.id.isNotEmpty)
+            .toList(growable: false)
       : const <ConversationSummary>[];
 }

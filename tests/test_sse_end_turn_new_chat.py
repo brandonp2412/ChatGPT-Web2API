@@ -22,8 +22,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.turn_anchor import TurnEndResult, TurnTextResult
+from sloppa.cdp_driver import CDPDriver
+from sloppa.turn_anchor import TurnEndResult, TurnTextResult
 
 
 def _make_driver():
@@ -43,12 +43,12 @@ def _make_driver():
 def _install_virtual_clock(monkeypatch, start=0.0):
     """Return a controllable virtual clock + a sleep that advances it."""
     t = [start]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     return t
 
 

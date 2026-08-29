@@ -11,13 +11,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import (
+from sloppa.cdp_driver import (
     TOKEN_TTL_SECONDS,
     AuthExpiredError,
     CDPDriver,
     GenerationStuckError,
 )
-from chatgpt_web2api.turn_anchor import TurnEndResult, TurnTextResult
+from sloppa.turn_anchor import TurnEndResult, TurnTextResult
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -129,12 +129,12 @@ async def test_phase1_stall_raises_generation_stuck(monkeypatch):
     def fake_monotonic():
         return t[0]
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", fake_monotonic)
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", fake_monotonic)
 
     async def fast_sleep(s):
         t[0] += s  # each sleep advances "time" by the sleep amount
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     # _js returns: rate-limit scan = harmless text; assistant count = constant 1
     call = {"n": 0}
@@ -164,12 +164,12 @@ async def test_phase2_stall_raises_generation_stuck(monkeypatch):
     """Phase 2: text unchanging + Stop button present for >stall window → raise."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     # Track call sequence rather than expression-string matching (more robust).
     # Distinguish polls by unique substrings: the count poll is a bare expression
@@ -216,12 +216,12 @@ async def test_slow_appear_succeeds_without_cap(monkeypatch):
     shows intermittent node changes (e.g. loading placeholders) is allowed."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     # Count wobbles 0→1→0→1... every ~10 polls so the stall clock keeps
     # resetting, then settles at 2 (>initial) at poll 150 (~75s) to break Phase 1.
@@ -262,12 +262,12 @@ async def test_progressing_generation_does_not_raise(monkeypatch):
     in progress-sensitivity, not wall-clock-sensitivity."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     state = {"phase1_polls": 0, "phase2_polls": 0, "text": ""}
 
@@ -316,12 +316,12 @@ async def test_thinking_model_streams_during_answer_phase(monkeypatch):
     deltas."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     state = {"phase1": 0, "phase2": 0, "text": ""}
 
@@ -374,12 +374,12 @@ async def test_phase2_end_turn_fallback_completes_when_dom_action_missing(monkey
     is the defense-in-depth that would have caught the Phase-2 bug instantly."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     # Pretend we know the conversation id (set during Phase-1 in real flow).
     d._current_conv_id = "conv-fallback-test"
     d._access_token = "tok"
@@ -427,12 +427,12 @@ async def test_phase2_end_turn_fallback_ignored_on_fetch_failure(monkeypatch):
     and stall detector still govern. The loop must NOT crash on a backend error."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-x"
     d._access_token = "tok"
 
@@ -473,12 +473,12 @@ async def test_phase2_end_turn_fallback_skipped_when_no_text(monkeypatch):
     so an empty terminal node can't finish the loop prematurely."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-empty"
     d._access_token = "tok"
 
@@ -521,12 +521,12 @@ async def test_phase2_backend_end_turn_is_primary_over_dom(monkeypatch):
     even if has_action is also true."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-dom"
     d._access_token = "tok"
 
@@ -584,12 +584,12 @@ async def test_thinking_placeholder_does_not_stall_past_90s(monkeypatch):
     flips True after the thinking settles), which is how completion now works."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-think"
     d._access_token = "tok"
 
@@ -652,12 +652,12 @@ async def test_saw_thinking_unlocks_fallback_but_empty_end_turn_does_not_finish(
     finish. Completion stays strict even when the fallback is unlocked."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-empty-think"
     d._access_token = "tok"
 
@@ -704,12 +704,12 @@ async def test_saw_thinking_with_end_turn_and_content_finishes(monkeypatch):
     The rescue path for long reasoning: DOM action slow, backend confirms done."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     d._current_conv_id = "conv-rescue"
     d._access_token = "tok"
 
@@ -755,7 +755,7 @@ async def test_mcp_auth_expired_returns_error_result():
     The call_tool handler catches it → CallToolResult(isError=True); we verify
     the do_ function propagates the exception (the catch lives in call_tool's
     closure, tested via the exception class contract)."""
-    from chatgpt_web2api import mcp_server
+    from sloppa import mcp_server
 
     drv = MagicMock(spec=CDPDriver)
     drv._current_conv_id = None
@@ -781,7 +781,7 @@ async def test_mcp_auth_expired_returns_error_result():
 def test_http_error_response_auth_expired_is_401():
     from unittest.mock import MagicMock
 
-    from chatgpt_web2api.api_server import APIServer
+    from sloppa.api_server import APIServer
 
     srv = APIServer.__new__(APIServer)  # bypass __init__
     srv._driver = MagicMock()
@@ -792,7 +792,7 @@ def test_http_error_response_auth_expired_is_401():
 def test_http_error_response_generation_stuck_is_504():
     from unittest.mock import MagicMock
 
-    from chatgpt_web2api.api_server import APIServer
+    from sloppa.api_server import APIServer
 
     srv = APIServer.__new__(APIServer)
     srv._driver = MagicMock()

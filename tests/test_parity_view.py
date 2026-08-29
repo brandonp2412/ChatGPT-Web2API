@@ -1,4 +1,4 @@
-from chatgpt_web2api.parity_view import normalize_client_conversation
+from sloppa.parity_view import normalize_client_conversation
 
 
 def test_client_view_exposes_visible_sibling_messages_but_not_hidden_content():

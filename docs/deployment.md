@@ -1,4 +1,4 @@
-# ChatGPT-Web2API — Deployment Guide
+# Sloppa — Deployment Guide
 
 > Looking for a different doc? See the **[documentation index](INDEX.md)** for a
 > "which doc should I read?" routing table.
@@ -13,20 +13,20 @@ Anyone with Python and Chrome can run it in 3 steps:
 
 ```bash
 # 1. Install
-pip install git+https://github.com/your-org/ChatGPT-Web2API.git
+pip install git+https://github.com/your-org/Sloppa.git
 
 # 2. Start — launches Chrome, opens chatgpt.com
-chatgpt-web2api
+sloppa
 
 # 3. First time: log into ChatGPT in the Chrome window that opens.
 #    The proxy detects login automatically and starts serving.
 ```
 
-The Chrome profile is saved at `~/.chatgpt-web2api/chrome-profile/`. Subsequent starts skip login.
+The Chrome profile is saved at `~/.sloppa/chrome-profile/`. Subsequent starts skip login.
 
 ### Configuration
 
-Create `~/.chatgpt-web2api/config.json`:
+Create `~/.sloppa/config.json`:
 
 ```json
 {
@@ -40,7 +40,7 @@ Create `~/.chatgpt-web2api/config.json`:
 Or use environment variables:
 
 ```bash
-W2A_PORT=9090 W2A_API_KEYS=sk-key1,sk-key2 chatgpt-web2api
+SLOPPA_PORT=9090 SLOPPA_API_KEYS=sk-key1,sk-key2 sloppa
 ```
 
 ---
@@ -77,7 +77,7 @@ The file should look like:
 
 ```bash
 # Build
-docker build -t chatgpt-web2api .
+docker build -t sloppa .
 
 # Run (mount cookies + persistent profile)
 docker run -d \
@@ -85,7 +85,7 @@ docker run -d \
   -p 8080:8080 \
   -v ./cookies.json:/data/cookies/cookies.json:ro \
   -v chatgpt-profile:/data/chrome-profile \
-  chatgpt-web2api
+  sloppa
 ```
 
 ### Step 3: Use it
@@ -112,7 +112,7 @@ Run the proxy on a server, let others connect to it.
 
 ```bash
 # On the server (with API key protection)
-chatgpt-web2api --host 0.0.0.0 --port 8080
+sloppa --host 0.0.0.0 --port 8080
 
 # Or with config
 cat > config.json << 'EOF'
@@ -123,7 +123,7 @@ cat > config.json << 'EOF'
   "default_model": "auto"
 }
 EOF
-chatgpt-web2api --config config.json
+sloppa --config config.json
 ```
 
 Others connect:
@@ -155,7 +155,7 @@ with two supervisor styles:
 
 - **`ensure` on a timer** — mirrors the ZCode hook model; reconciles REST + SSE
   on a schedule, no long-lived Python process.
-- **`start` + `chatgpt-web2api-mcp` as services** — classic always-on; the
+- **`start` + `sloppa-mcp` as services** — classic always-on; the
   supervisor owns restart policy for the two long-lived processes (REST owns
   Chrome; MCP/SSE is a separate process that attaches to it).
 
@@ -216,13 +216,13 @@ Each Chrome instance handles one request at a time. Run multiple for throughput:
 
 ```bash
 # Instance 1
-chatgpt-web2api --port 8081 --cdp-port 9222
+sloppa --port 8081 --cdp-port 9222
 
 # Instance 2
-chatgpt-web2api --port 8082 --cdp-port 9223 --user-data-dir ~/.chatgpt-web2api/chrome-profile-2
+sloppa --port 8082 --cdp-port 9223 --user-data-dir ~/.sloppa/chrome-profile-2
 
 # Instance 3
-chatgpt-web2api --port 8083 --cdp-port 9224 --user-data-dir ~/.chatgpt-web2api/chrome-profile-3
+sloppa --port 8083 --cdp-port 9224 --user-data-dir ~/.sloppa/chrome-profile-3
 ```
 
 Put a reverse proxy (nginx, Caddy) in front with round-robin:
@@ -247,7 +247,7 @@ server {
 
 ### Parallel mode (one Chrome, many tabs)
 
-`parallel_tabs: true` (or `W2A_PARALLEL_TABS=1`) lets several bridge processes
+`parallel_tabs: true` (or `SLOPPA_PARALLEL_TABS=1`) lets several bridge processes
 share **one** Chrome instance, each driving its own owned tab in parallel — no
 proxy, no second browser profile. Per-target locking serializes same-tab
 mutations while different tabs run concurrently. Requires `tab_mode: "owned"`
@@ -255,10 +255,10 @@ mutations while different tabs run concurrently. Requires `tab_mode: "owned"`
 
 ```bash
 # Process A — its own REST port, own tab on the shared Chrome (cdp 9222)
-W2A_PARALLEL_TABS=1 chatgpt-web2api --port 8081 --cdp-port 9222
+SLOPPA_PARALLEL_TABS=1 sloppa --port 8081 --cdp-port 9222
 
 # Process B — different REST port, different tab on the SAME Chrome
-W2A_PARALLEL_TABS=1 chatgpt-web2api --port 8082 --cdp-port 9222
+SLOPPA_PARALLEL_TABS=1 sloppa --port 8082 --cdp-port 9222
 ```
 
 **Requirements and caveats:**
@@ -276,8 +276,8 @@ W2A_PARALLEL_TABS=1 chatgpt-web2api --port 8082 --cdp-port 9222
   automatically. MCP derives it from `mcp:sse:{host}:{port}` (SSE) or
   `mcp:stdio:{pid}` (stdio) when `parallel_tabs=true`. The stdio PID identity
   is unique per run but **not stable across restart** (a new PID can't reclaim
-  the prior tab); set `W2A_INSTANCE_ID` to a stable, unique-per-worker value if
-  you need restart-reclaim. **Do not reuse the same `W2A_INSTANCE_ID` across
+  the prior tab); set `SLOPPA_INSTANCE_ID` to a stable, unique-per-worker value if
+  you need restart-reclaim. **Do not reuse the same `SLOPPA_INSTANCE_ID` across
   live workers** on the same Chrome — that makes them collide on one tab.
 - **Fail-closed, not fallback.** If a process can't obtain (or loses mid-flight)
   an owned tab, the operation fails retryably (REST 503 `code=owned_tab_required`
@@ -341,4 +341,4 @@ than opaque.
 | "Chrome CDP did not respond" | Chrome isn't running. Check `chrome_path` in config |
 | "Timed out waiting for assistant" | Page may be stuck. Restart the proxy |
 | Cookies not working | Re-export fresh cookies. They expire every ~2 weeks |
-| Headless fails | Anti-bot detection blocks headless. Use cookie injection + headed mode on a VNC/display. The Dockerfile ships `W2A_HEADLESS=false` for this reason; set `W2A_HEADLESS=true` only if you accept the anti-bot risk |
+| Headless fails | Anti-bot detection blocks headless. Use cookie injection + headed mode on a VNC/display. The Dockerfile ships `SLOPPA_HEADLESS=false` for this reason; set `SLOPPA_HEADLESS=true` only if you accept the anti-bot risk |

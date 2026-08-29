@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
+from sloppa.cdp_driver import CDPDriver
 
 # Reuse the richer fake from test_cdp_foundation for tests that drive the real
 # _refresh_token body — it scripts Runtime.evaluate responses by CDP id.
@@ -51,6 +51,11 @@ def _make_driver():
     d = CDPDriver(cdp_port=9222)
     d._access_token = "tok"
     d._token_fetched_at = time.time()
+    # These tests exercise tab selection, not the live Network-domain
+    # identity listener. Stub it so the fake websocket cannot deadlock while
+    # waiting for CDP command responses it intentionally does not implement.
+    d._attach_identity_listener = AsyncMock()
+    d._ensure_send_ready = AsyncMock()
     return d
 
 
@@ -85,7 +90,7 @@ async def test_connect_creates_owned_tab():
         d._wait_for_chatgpt_ready = AsyncMock()
         d._refresh_token = AsyncMock()
         mock_connect, fake_ws = _mock_ws_connect()
-        with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+        with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
             await d.connect()
 
     assert d._target_id == "test-tab-id-123"
@@ -141,7 +146,7 @@ async def test_connect_owned_mode_fails_closed_on_tab_creation_failure():
     d._wait_for_chatgpt_ready = AsyncMock()
     d._refresh_token = AsyncMock()
     mock_connect, fake_ws = _mock_ws_connect()
-    with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+    with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
         with pytest.raises(Exception, match="shared-tab fallback is disabled in owned mode"):
             await d.connect()
 
@@ -187,7 +192,7 @@ async def test_reconnect_refinds_owned_tab():
     d._refresh_token = AsyncMock()
 
     mock_connect, fake_ws = _mock_ws_connect()
-    with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+    with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
         await d.reconnect()
 
     assert d._target_id == "owned-tab-789"  # unchanged
@@ -218,7 +223,7 @@ async def test_reconnect_recreates_if_tab_gone():
     d._refresh_token = AsyncMock()
 
     mock_connect, fake_ws = _mock_ws_connect()
-    with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+    with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
         await d.reconnect()
 
     assert d._target_id == "new-tab-999"  # re-created
@@ -260,7 +265,7 @@ async def test_connect_waits_for_chatgpt_ready():
         mock_urlopen.return_value = mock_resp
 
         mock_connect, _ = _mock_ws_connect()
-        with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+        with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
             await d.connect()
 
     ready_spy.assert_awaited_once()
@@ -380,7 +385,7 @@ async def test_connect_adopts_existing_chatgpt_tab_in_adopt_mode():
         d._refresh_token = AsyncMock()
 
         mock_connect, _ = _mock_ws_connect()
-        with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+        with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
             await d.connect()
 
     assert d._target_id == "existing-tab-1"
@@ -472,7 +477,7 @@ async def test_default_owned_mode_creates_tab_even_when_chatgpt_tab_exists():
         d._wait_for_chatgpt_ready = AsyncMock()
         d._refresh_token = AsyncMock()
         mock_connect, _ = _mock_ws_connect()
-        with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+        with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
             await d.connect()
 
     assert create_called == ["Target.createTarget"], \
@@ -521,10 +526,9 @@ async def test_two_owned_drivers_get_distinct_target_ids():
             d._wait_for_chatgpt_ready = AsyncMock()
             d._refresh_token = AsyncMock()
             mock_connect, _ = _mock_ws_connect()
-            with patch("chatgpt_web2api.cdp_driver.websockets.connect", mock_connect):
+            with patch("sloppa.cdp_driver.websockets.connect", mock_connect):
                 await d.connect()
 
     assert d1._target_id != d2._target_id, \
         "two owned drivers must hold distinct tabs — shared id means shared DOM"
     assert d1._owns_target and d2._owns_target
-

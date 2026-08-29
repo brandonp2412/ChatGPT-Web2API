@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../model/account_models.dart';
 import '../model/chat_models.dart';
+import '../logging/app_logger.dart';
 
 class BridgeSettings {
   const BridgeSettings({required this.baseUrl, this.apiKey = ''});
@@ -16,9 +18,9 @@ class BridgeSettings {
   Uri get baseUri => Uri.parse(normalizedBaseUrl(baseUrl));
 
   BridgeSettings copyWith({String? baseUrl, String? apiKey}) => BridgeSettings(
-        baseUrl: baseUrl ?? this.baseUrl,
-        apiKey: apiKey ?? this.apiKey,
-      );
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+  );
 
   static String normalizedBaseUrl(String input) {
     var value = input.trim();
@@ -47,7 +49,8 @@ class BridgeSettings {
       return 'Use HTTPS, or HTTP only for loopback';
     }
     final host = uri.host.toLowerCase();
-    final loopback = host == '127.0.0.1' || host == 'localhost' || host == '::1';
+    final loopback =
+        host == '127.0.0.1' || host == 'localhost' || host == '::1';
     return loopback ? null : 'Non-loopback bridge URLs must use HTTPS';
   }
 }
@@ -87,21 +90,39 @@ class UploadedAttachment {
 }
 
 class BridgeClient {
-  BridgeClient(this.settings, {http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+  static const int _maxJsonResponseBytes = 32 * 1024 * 1024;
+  static const Duration _requestTimeout = Duration(seconds: 45);
+  BridgeClient(
+    this.settings, {
+    http.Client? httpClient,
+    Duration? requestTimeout,
+    Duration? streamIdleTimeout,
+  }) : _http = httpClient ?? http.Client(),
+       _requestTimeoutOverride = requestTimeout,
+       _streamIdleTimeoutOverride = streamIdleTimeout;
 
   BridgeSettings settings;
   final http.Client _http;
+  final Duration? _requestTimeoutOverride;
+  final Duration? _streamIdleTimeoutOverride;
+
+  Duration get requestTimeout => _requestTimeoutOverride ?? _requestTimeout;
+
+  Duration get streamIdleTimeout =>
+      _streamIdleTimeoutOverride ?? const Duration(seconds: 90);
 
   void close() => _http.close();
 
   Map<String, String> get _headers => <String, String>{
-        'Accept': 'application/json',
-        if (settings.apiKey.trim().isNotEmpty)
-          'Authorization': 'Bearer ${settings.apiKey.trim()}',
-      };
+    'Accept': 'application/json',
+    if (settings.apiKey.trim().isNotEmpty)
+      'Authorization': 'Bearer ${settings.apiKey.trim()}',
+  };
 
-  Uri _uri(String path, [Map<String, String?> query = const <String, String?>{}]) {
+  Uri _uri(
+    String path, [
+    Map<String, String?> query = const <String, String?>{},
+  ]) {
     final filtered = <String, String>{};
     for (final entry in query.entries) {
       final value = entry.value;
@@ -127,10 +148,10 @@ class BridgeClient {
     int offset = 0,
     int limit = 50,
   }) async {
-    final response = await _getMap(
-      '/v1/conversations',
-      <String, String?>{'offset': '$offset', 'limit': '$limit'},
-    );
+    final response = await _getMap('/v1/conversations', <String, String?>{
+      'offset': '$offset',
+      'limit': '$limit',
+    });
     return _conversationSummaries(response['data']);
   }
 
@@ -139,12 +160,15 @@ class BridgeClient {
       '/v1/conversations/search',
       <String, String?>{'query': query},
     );
-    final dynamic raw = response['data'] ?? response['items'] ?? response['conversations'];
+    final dynamic raw =
+        response['data'] ?? response['items'] ?? response['conversations'];
     return _conversationSummaries(raw);
   }
 
   Future<ChatConversation> conversation(String id) async {
-    final response = await _getMap('/v1/conversations/${Uri.encodeComponent(id)}');
+    final response = await _getMap(
+      '/v1/conversations/${Uri.encodeComponent(id)}',
+    );
     final data = response['data'];
     if (data is! Map) {
       throw const BridgeException('Bridge returned a malformed conversation');
@@ -195,12 +219,15 @@ class BridgeClient {
     if (data is! List) {
       return const <String>[];
     }
-    return data.map((dynamic item) {
-      if (item is Map) {
-        return (item['id'] ?? item['slug'] ?? '').toString();
-      }
-      return item.toString();
-    }).where((String item) => item.isNotEmpty).toList(growable: false);
+    return data
+        .map((dynamic item) {
+          if (item is Map) {
+            return (item['id'] ?? item['slug'] ?? '').toString();
+          }
+          return item.toString();
+        })
+        .where((String item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<List<String>> reasoningLevels() async {
@@ -208,9 +235,9 @@ class BridgeClient {
     final data = response['data'];
     return data is List
         ? data
-            .map((dynamic item) => item.toString())
-            .where((String item) => item.isNotEmpty)
-            .toList(growable: false)
+              .map((dynamic item) => item.toString())
+              .where((String item) => item.isNotEmpty)
+              .toList(growable: false)
         : const <String>[];
   }
 
@@ -220,12 +247,15 @@ class BridgeClient {
     if (data is! List) {
       return const <String>[];
     }
-    return data.map((dynamic item) {
-      if (item is Map) {
-        return (item['label'] ?? item['name'] ?? '').toString();
-      }
-      return item.toString();
-    }).where((String item) => item.isNotEmpty).toList(growable: false);
+    return data
+        .map((dynamic item) {
+          if (item is Map) {
+            return (item['label'] ?? item['name'] ?? '').toString();
+          }
+          return item.toString();
+        })
+        .where((String item) => item.isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<List<ProjectSummary>> projects() async {
@@ -233,10 +263,13 @@ class BridgeClient {
     final data = response['data'];
     return data is List
         ? data
-            .whereType<Map>()
-            .map((Map item) => ProjectSummary.fromJson(item.cast<String, dynamic>()))
-            .where((ProjectSummary item) => item.id.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (Map<Object?, Object?> item) =>
+                    ProjectSummary.fromJson(item.cast<String, dynamic>()),
+              )
+              .where((ProjectSummary item) => item.id.isNotEmpty)
+              .toList(growable: false)
         : const <ProjectSummary>[];
   }
 
@@ -249,7 +282,7 @@ class BridgeClient {
       <String, String?>{'cursor': cursor},
     );
     final data = response['data'];
-    if (data is Map) {
+    if (data is Map<Object?, Object?>) {
       return _conversationSummaries(
         data['items'] ?? data['conversations'] ?? data['data'],
       );
@@ -262,10 +295,13 @@ class BridgeClient {
     final data = response['data'];
     return data is List
         ? data
-            .whereType<Map>()
-            .map((Map item) => GptSummary.fromJson(item.cast<String, dynamic>()))
-            .where((GptSummary item) => item.id.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (Map<Object?, Object?> item) =>
+                    GptSummary.fromJson(item.cast<String, dynamic>()),
+              )
+              .where((GptSummary item) => item.id.isNotEmpty)
+              .toList(growable: false)
         : const <GptSummary>[];
   }
 
@@ -274,25 +310,32 @@ class BridgeClient {
     final data = response['data'];
     return data is List
         ? data
-            .whereType<Map>()
-            .map((Map item) => LibraryItem.fromJson(item.cast<String, dynamic>()))
-            .where((LibraryItem item) => item.name.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (Map<Object?, Object?> item) =>
+                    LibraryItem.fromJson(item.cast<String, dynamic>()),
+              )
+              .where((LibraryItem item) => item.name.isNotEmpty)
+              .toList(growable: false)
         : const <LibraryItem>[];
   }
 
-  Future<List<InteractiveAction>> interactiveActions({String? conversationId}) async {
-    final response = await _getMap(
-      '/v1/ui-actions',
-      <String, String?>{'conversation_id': conversationId},
-    );
+  Future<List<InteractiveAction>> interactiveActions({
+    String? conversationId,
+  }) async {
+    final response = await _getMap('/v1/ui-actions', <String, String?>{
+      'conversation_id': conversationId,
+    });
     final data = response['data'];
     return data is List
         ? data
-            .whereType<Map>()
-            .map((Map item) => InteractiveAction.fromJson(item.cast<String, dynamic>()))
-            .where((InteractiveAction item) => item.label.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (Map<Object?, Object?> item) =>
+                    InteractiveAction.fromJson(item.cast<String, dynamic>()),
+              )
+              .where((InteractiveAction item) => item.label.isNotEmpty)
+              .toList(growable: false)
         : const <InteractiveAction>[];
   }
 
@@ -311,8 +354,9 @@ class BridgeClient {
     final request = http.MultipartRequest('POST', _uri('/v1/attachments'));
     request.headers.addAll(_headers);
     request.files.add(await http.MultipartFile.fromPath('file', file.path));
-    final streamed = await _http.send(request);
-    final body = await streamed.stream.bytesToString();
+    final streamed = await _http.send(request).timeout(requestTimeout);
+    _ensureDeclaredResponseSize('/v1/attachments', streamed.contentLength);
+    final body = await _readStreamBody(streamed.stream, '/v1/attachments');
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
       throw _error(streamed.statusCode, body);
     }
@@ -337,6 +381,7 @@ class BridgeClient {
     List<String> attachmentIds = const <String>[],
     List<String> libraryFiles = const <String>[],
   }) async* {
+    final stopwatch = Stopwatch()..start();
     final request = http.Request('POST', _uri('/v1/chat/send'));
     request.headers.addAll(<String, String>{
       ..._headers,
@@ -360,12 +405,24 @@ class BridgeClient {
       if (libraryFiles.isNotEmpty) 'library_files': libraryFiles,
     });
 
-    final response = await _http.send(request);
+    appLogger.info(
+      'HTTP POST /v1/chat/send started (${request.bodyBytes.length} bytes)',
+    );
+    final response = await _http.send(request).timeout(requestTimeout);
+    appLogger.info(
+      'HTTP POST /v1/chat/send headers received: ${response.statusCode} '
+      '(${stopwatch.elapsedMilliseconds}ms, request_id=${response.headers['x-request-id'] ?? 'none'})',
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = await response.stream.bytesToString();
+      _ensureDeclaredResponseSize('/v1/chat/send', response.contentLength);
+      final body = await _readStreamBody(response.stream, '/v1/chat/send');
       throw _error(response.statusCode, body);
     }
     yield* _eventStream(response.stream);
+    appLogger.info(
+      'HTTP POST /v1/chat/send stream completed '
+      '(${stopwatch.elapsedMilliseconds}ms)',
+    );
   }
 
   Stream<BridgeEvent> backgroundEvents(
@@ -383,9 +440,16 @@ class BridgeClient {
       ..._headers,
       'Accept': 'text/event-stream',
     });
-    final response = await _http.send(request);
+    final response = await _http.send(request).timeout(requestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final body = await response.stream.bytesToString();
+      _ensureDeclaredResponseSize(
+        '/v1/conversations/$conversationId/events',
+        response.contentLength,
+      );
+      final body = await _readStreamBody(
+        response.stream,
+        '/v1/conversations/$conversationId/events',
+      );
       throw _error(response.statusCode, body);
     }
     yield* _eventStream(response.stream);
@@ -410,35 +474,80 @@ class BridgeClient {
   }
 
   Stream<BridgeEvent> _eventStream(Stream<List<int>> bytes) async* {
-    await for (final line in bytes.transform(utf8.decoder).transform(const LineSplitter())) {
-      if (!line.startsWith('data:')) {
-        continue;
-      }
-      final payload = line.substring(5).trim();
-      if (payload.isEmpty || payload == '[DONE]') {
-        continue;
-      }
-      try {
-        final decoded = jsonDecode(payload);
-        if (decoded is Map) {
-          yield BridgeEvent(data: decoded.cast<String, dynamic>(), raw: payload);
+    final lines = bytes
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .timeout(streamIdleTimeout);
+    final dataLines = <String>[];
+    appLogger.debug('SSE stream opened');
+    try {
+      await for (final line in lines) {
+        if (line.isEmpty) {
+          if (dataLines.isEmpty) {
+            continue;
+          }
+          final payload = dataLines.join('\n').trim();
+          dataLines.clear();
+          if (payload == '[DONE]') {
+            return;
+          }
+          if (payload.isNotEmpty) {
+            yield _eventFromPayload(payload);
+          }
+          continue;
         }
-      } on FormatException {
-        yield BridgeEvent(
-          data: <String, dynamic>{'type': 'text', 'delta': payload},
-          raw: payload,
-        );
+        if (!line.startsWith('data:')) {
+          continue;
+        }
+        var value = line.substring(5);
+        if (value.startsWith(' ')) {
+          value = value.substring(1);
+        }
+        dataLines.add(value);
       }
+      if (dataLines.isNotEmpty) {
+        final payload = dataLines.join('\n').trim();
+        if (payload.isNotEmpty && payload != '[DONE]') {
+          yield _eventFromPayload(payload);
+        }
+      }
+    } on TimeoutException {
+      appLogger.warning(
+        'SSE stream idle for ${streamIdleTimeout.inSeconds} seconds; closing it',
+      );
+      throw const BridgeException(
+        'Bridge stream timed out while waiting for a response',
+      );
+    } finally {
+      appLogger.debug('SSE stream closed');
     }
+  }
+
+  BridgeEvent _eventFromPayload(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map) {
+        return BridgeEvent(data: decoded.cast<String, dynamic>(), raw: payload);
+      }
+    } on FormatException {
+      // Plain-text bridge events are represented as text deltas below.
+    }
+    return BridgeEvent(
+      data: <String, dynamic>{'type': 'text', 'delta': payload},
+      raw: payload,
+    );
   }
 
   List<ConversationSummary> _conversationSummaries(dynamic raw) {
     return raw is List
         ? raw
-            .whereType<Map>()
-            .map((Map item) => ConversationSummary.fromJson(item.cast<String, dynamic>()))
-            .where((ConversationSummary item) => item.id.isNotEmpty)
-            .toList(growable: false)
+              .whereType<Map<Object?, Object?>>()
+              .map(
+                (Map<Object?, Object?> item) =>
+                    ConversationSummary.fromJson(item.cast<String, dynamic>()),
+              )
+              .where((ConversationSummary item) => item.id.isNotEmpty)
+              .toList(growable: false)
         : const <ConversationSummary>[];
   }
 
@@ -457,22 +566,49 @@ class BridgeClient {
     String path, [
     Map<String, String?> query = const <String, String?>{},
   ]) async {
-    final response = await _http.get(_uri(path, query), headers: _headers);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw _error(response.statusCode, response.body);
+    final uri = _uri(path, query);
+    final stopwatch = Stopwatch()..start();
+    appLogger.debug('HTTP GET ${redactUrl(uri.toString())}');
+    try {
+      final response = await _http
+          .get(uri, headers: _headers)
+          .timeout(requestTimeout);
+      final responseBytes = response.bodyBytes.length;
+      appLogger.info(
+        'HTTP GET $path -> ${response.statusCode} (${stopwatch.elapsedMilliseconds}ms, $responseBytes bytes, request_id=${response.headers['x-request-id'] ?? 'none'})',
+      );
+      _ensureResponseSize(path, responseBytes);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw _error(response.statusCode, response.body);
+      }
+      return _decodeMap(response.body);
+    } catch (error, stackTrace) {
+      appLogger.handle(error, stackTrace, 'HTTP GET failed: $path');
+      rethrow;
     }
-    return _decodeMap(response.body);
   }
 
   Future<Map<String, dynamic>> _postMap(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _http.post(
-      _uri(path),
-      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+    final stopwatch = Stopwatch()..start();
+    appLogger.debug('HTTP POST $path');
+    final response = await _http
+        .post(
+          _uri(path),
+          headers: <String, String>{
+            ..._headers,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(requestTimeout);
+    final responseBytes = response.bodyBytes.length;
+    appLogger.info(
+      'HTTP POST $path -> ${response.statusCode} (${stopwatch.elapsedMilliseconds}ms, $responseBytes bytes, request_id=${response.headers['x-request-id'] ?? 'none'})',
     );
+    _ensureResponseSize(path, responseBytes);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _error(response.statusCode, response.body);
     }
@@ -485,11 +621,23 @@ class BridgeClient {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _http.patch(
-      _uri(path),
-      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+    final stopwatch = Stopwatch()..start();
+    appLogger.debug('HTTP PATCH $path');
+    final response = await _http
+        .patch(
+          _uri(path),
+          headers: <String, String>{
+            ..._headers,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(requestTimeout);
+    final responseBytes = response.bodyBytes.length;
+    appLogger.info(
+      'HTTP PATCH $path -> ${response.statusCode} (${stopwatch.elapsedMilliseconds}ms, $responseBytes bytes, request_id=${response.headers['x-request-id'] ?? 'none'})',
     );
+    _ensureResponseSize(path, responseBytes);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _error(response.statusCode, response.body);
     }
@@ -497,7 +645,16 @@ class BridgeClient {
   }
 
   Future<Map<String, dynamic>> _deleteMap(String path) async {
-    final response = await _http.delete(_uri(path), headers: _headers);
+    final stopwatch = Stopwatch()..start();
+    appLogger.debug('HTTP DELETE $path');
+    final response = await _http
+        .delete(_uri(path), headers: _headers)
+        .timeout(requestTimeout);
+    final responseBytes = response.bodyBytes.length;
+    appLogger.info(
+      'HTTP DELETE $path -> ${response.statusCode} (${stopwatch.elapsedMilliseconds}ms, $responseBytes bytes, request_id=${response.headers['x-request-id'] ?? 'none'})',
+    );
+    _ensureResponseSize(path, responseBytes);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _error(response.statusCode, response.body);
     }
@@ -507,11 +664,44 @@ class BridgeClient {
   }
 
   Map<String, dynamic> _decodeMap(String body) {
-    final decoded = jsonDecode(body);
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(body);
+    } on FormatException {
+      throw const BridgeException('Bridge returned malformed JSON');
+    }
     if (decoded is! Map) {
       throw const BridgeException('Bridge returned malformed JSON');
     }
     return decoded.cast<String, dynamic>();
+  }
+
+  void _ensureResponseSize(String path, int bytes) {
+    if (bytes > _maxJsonResponseBytes) {
+      appLogger.warning(
+        'HTTP response $path is too large ($bytes bytes); refusing to parse',
+      );
+      throw const BridgeException(
+        'Bridge response is too large to process safely',
+      );
+    }
+  }
+
+  void _ensureDeclaredResponseSize(String path, int? bytes) {
+    if (bytes != null) {
+      _ensureResponseSize(path, bytes);
+    }
+  }
+
+  Future<String> _readStreamBody(Stream<List<int>> stream, String path) async {
+    final builder = BytesBuilder(copy: false);
+    var total = 0;
+    await for (final chunk in stream) {
+      total += chunk.length;
+      _ensureResponseSize(path, total);
+      builder.add(chunk);
+    }
+    return utf8.decode(builder.takeBytes(), allowMalformed: true);
   }
 
   BridgeException _error(int statusCode, String body) {

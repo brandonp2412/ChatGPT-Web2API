@@ -1,6 +1,6 @@
 # Documentation Index
 
-This is the navigation hub for `chatgpt-web2api` documentation. Every doc in
+This is the navigation hub for `sloppa` documentation. Every doc in
 `docs/` is listed here with a one-line purpose. If you don't know which one to
 read, start with the [routing table](#which-doc-should-i-read) below.
 
@@ -53,7 +53,7 @@ deployment.
 
 These capture ChatGPT's web internals **as observed at a point in time**.
 ChatGPT changes its DOM/API frequently — treat them as a starting map, not a
-contract. The `doctor` command (`chatgpt-web2api doctor`) is the live source of
+contract. The `doctor` command (`sloppa doctor`) is the live source of
 truth for current selector/endpoint health.
 
 | Doc | Purpose |
@@ -78,13 +78,13 @@ individually here.
 
 ```bash
 # Start / reconcile (the one command):
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 
 # Health:
 curl -s http://localhost:8080/health
 
 # Do NOT use (no __main__ block):
-#   python -m chatgpt_web2api.ensure
+#   python -m sloppa.ensure
 ```
 
 See [runbook.md](runbook.md) §1 (startup checklist) and §8 (post-deploy

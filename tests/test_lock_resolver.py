@@ -21,10 +21,10 @@ import asyncio
 
 import pytest
 
-from chatgpt_web2api import lock_resolver as lr_mod
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.cross_process_lock import CrossProcessLock
-from chatgpt_web2api.lock_resolver import (
+from sloppa import lock_resolver as lr_mod
+from sloppa.cdp_driver import CDPDriver
+from sloppa.cross_process_lock import CrossProcessLock
+from sloppa.lock_resolver import (
     MutationLock,
     OwnedTabRequiredError,
     _proc_lock_for,

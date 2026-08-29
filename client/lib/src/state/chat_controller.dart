@@ -10,20 +10,28 @@ import '../model/account_models.dart';
 import '../model/chat_models.dart';
 import '../storage/secure_store.dart';
 import 'pagination.dart';
+import '../logging/app_logger.dart';
+import '../config.dart';
 
 enum SidebarSection { chats, projects, gpts }
 
 class ChatController extends ChangeNotifier {
   ChatController({required SecureStore store}) : _store = store;
 
+  @visibleForTesting
+  static bool bridgeHealthReady(Map<String, dynamic> health) {
+    final status = (health['status'] ?? '').toString();
+    return health['ready_for_requests'] == true ||
+        status == 'healthy' ||
+        status == 'starting';
+  }
+
   final SecureStore _store;
   BridgeClient? _client;
   ParityActionsApi? _actionsApi;
   StreamSubscription<BridgeEvent>? _backgroundSubscription;
 
-  BridgeSettings settings = const BridgeSettings(
-    baseUrl: 'http://127.0.0.1:8080',
-  );
+  BridgeSettings settings = const BridgeSettings(baseUrl: defaultBridgeUrl);
   List<ConversationSummary> conversations = const <ConversationSummary>[];
   List<ProjectSummary> projects = const <ProjectSummary>[];
   List<ProjectFile> activeProjectFiles = const <ProjectFile>[];
@@ -61,6 +69,9 @@ class ChatController extends ChangeNotifier {
   bool parityActionBusy = false;
   bool sending = false;
   bool connected = false;
+  bool _disposed = false;
+  Future<void>? _initializeFuture;
+  Future<void>? _connectFuture;
 
   BridgeClient get client {
     final value = _client;
@@ -125,7 +136,9 @@ class ChatController extends ChangeNotifier {
   }
 
   List<String> get availableModes {
-    final normalized = toolLabels.map((String item) => item.toLowerCase()).join(' | ');
+    final normalized = toolLabels
+        .map((String item) => item.toLowerCase())
+        .join(' | ');
     final result = <String>['normal'];
     if (normalized.contains('search')) {
       result.add('search');
@@ -150,12 +163,34 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    final existing = _initializeFuture;
+    if (existing != null) {
+      appLogger.debug('Controller initialize already in progress; joining it');
+      return existing;
+    }
+    final future = _initializeInternal();
+    _initializeFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_initializeFuture, future)) {
+        _initializeFuture = null;
+      }
+    }
+  }
+
+  Future<void> _initializeInternal() async {
+    appLogger.info('Controller initialize: loading settings and cache');
     settings = await _store.loadSettings();
+    appLogger.info('Bridge configured: ${redactUrl(settings.baseUrl)}');
     _replaceClients();
     await _restoreCache();
     initialized = true;
     notifyListeners();
     await connect(silent: true);
+    appLogger.info(
+      'Controller initialize finished: connected=$connected conversations=${conversations.length} error=$errorMessage',
+    );
   }
 
   Future<void> saveSettings(BridgeSettings next) async {
@@ -177,10 +212,25 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> connect({bool silent = false}) async {
-    if (connecting) {
-      return;
+    final existing = _connectFuture;
+    if (existing != null) {
+      appLogger.debug('Bridge connect already in progress; joining it');
+      return existing;
     }
+    final future = _connectInternal(silent: silent);
+    _connectFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_connectFuture, future)) {
+        _connectFuture = null;
+      }
+    }
+  }
+
+  Future<void> _connectInternal({required bool silent}) async {
     connecting = true;
+    appLogger.info('Bridge connect started (silent=$silent)');
     if (!silent) {
       errorMessage = null;
     }
@@ -188,9 +238,10 @@ class ChatController extends ChangeNotifier {
     try {
       final health = await client.health();
       final status = (health['status'] ?? '').toString();
-      connected = status == 'healthy' || status == 'starting';
-      if (!connected && status.isNotEmpty) {
-        throw BridgeException('Bridge is $status');
+      connected = bridgeHealthReady(health);
+      if (!connected) {
+        final detail = status.isEmpty ? 'unavailable' : status;
+        throw BridgeException('Bridge is $detail');
       }
       await Future.wait<void>(<Future<void>>[
         refreshConversations(),
@@ -207,11 +258,19 @@ class ChatController extends ChangeNotifier {
       }
       errorMessage = null;
     } on Object catch (error) {
+      appLogger.error(
+        'Bridge connect failed: $error',
+        error,
+        StackTrace.current,
+      );
       connected = false;
       if (!silent || conversations.isEmpty) {
         errorMessage = _message(error);
       }
     } finally {
+      appLogger.info(
+        'Bridge connect finished: connected=$connected conversations=${conversations.length}',
+      );
       connecting = false;
       notifyListeners();
     }
@@ -233,10 +292,8 @@ class ChatController extends ChangeNotifier {
 
   Future<List<ConversationSummary>> _loadAllTopLevelConversations() {
     return collectOffsetPages<ConversationSummary>(
-      loadPage: (int offset, int limit) => client.conversations(
-        offset: offset,
-        limit: limit,
-      ),
+      loadPage: (int offset, int limit) =>
+          client.conversations(offset: offset, limit: limit),
       idOf: (ConversationSummary item) => item.id,
     );
   }
@@ -354,8 +411,8 @@ class ChatController extends ChangeNotifier {
       activeGpt = null;
       sidebarSection = SidebarSection.chats;
       conversations = await _loadAllTopLevelConversations().catchError(
-            (Object _) => conversations,
-          );
+        (Object _) => conversations,
+      );
     }
     errorMessage = null;
     notifyListeners();
@@ -369,6 +426,7 @@ class ChatController extends ChangeNotifier {
     if (id.isEmpty) {
       return;
     }
+    appLogger.info('Selecting conversation $id');
     await _stopBackgroundEvents();
     if (!preserveLoadingState) {
       loadingConversation = true;
@@ -382,9 +440,14 @@ class ChatController extends ChangeNotifier {
       optimisticUserMessage = null;
       streamingText = '';
       await _persistCache();
-      _startBackgroundEvents(id);
+      await _startBackgroundEvents(id);
       await refreshInteractiveActions();
     } on Object catch (error) {
+      appLogger.error(
+        'Conversation selection failed for $id: $error',
+        error,
+        StackTrace.current,
+      );
       errorMessage = _message(error);
     } finally {
       loadingConversation = false;
@@ -448,7 +511,10 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
     try {
       final uploaded = await client.uploadAttachment(file);
-      pendingAttachments = <UploadedAttachment>[...pendingAttachments, uploaded];
+      pendingAttachments = <UploadedAttachment>[
+        ...pendingAttachments,
+        uploaded,
+      ];
     } on Object catch (error) {
       errorMessage = _message(error);
     }
@@ -478,9 +544,10 @@ class ChatController extends ChangeNotifier {
   }
 
   void addLibraryFiles(Iterable<String> names) {
-    pendingLibraryFiles = <String>{...pendingLibraryFiles, ...names}
-        .where((String item) => item.trim().isNotEmpty)
-        .toList(growable: false);
+    pendingLibraryFiles = <String>{
+      ...pendingLibraryFiles,
+      ...names,
+    }.where((String item) => item.trim().isNotEmpty).toList(growable: false);
     notifyListeners();
   }
 
@@ -536,7 +603,9 @@ class ChatController extends ChangeNotifier {
       )) {
         if (event.type == 'response.error') {
           throw BridgeException(
-            (event.data['message'] ?? event.data['error'] ?? 'ChatGPT generation failed')
+            (event.data['message'] ??
+                    event.data['error'] ??
+                    'ChatGPT generation failed')
                 .toString(),
             code: event.data['code']?.toString(),
           );
@@ -556,7 +625,8 @@ class ChatController extends ChangeNotifier {
           completedConversationId = snapshot.id;
           await _persistCache();
         }
-        completedConversationId = event.conversationId ?? completedConversationId;
+        completedConversationId =
+            event.conversationId ?? completedConversationId;
         notifyListeners();
       }
 
@@ -575,7 +645,7 @@ class ChatController extends ChangeNotifier {
       await refreshPins(silent: true);
       final id = activeConversation?.id ?? completedConversationId;
       if (id != null && id.isNotEmpty) {
-        _startBackgroundEvents(id);
+        await _startBackgroundEvents(id);
         await refreshInteractiveActions();
       }
       await _persistCache();
@@ -943,7 +1013,9 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  Future<List<ProjectFile>> loadActiveProjectFiles({bool silent = false}) async {
+  Future<List<ProjectFile>> loadActiveProjectFiles({
+    bool silent = false,
+  }) async {
     final project = activeProject;
     if (project == null) {
       activeProjectFiles = const <ProjectFile>[];
@@ -987,7 +1059,7 @@ class ChatController extends ChangeNotifier {
         conversationId: id,
       );
       interactiveActions = const <InteractiveAction>[];
-      _startBackgroundEvents(id);
+      await _startBackgroundEvents(id);
       notifyListeners();
     } on Object catch (error) {
       errorMessage = _message(error);
@@ -1076,33 +1148,48 @@ class ChatController extends ChangeNotifier {
       return const <InteractiveAction>[];
     }
     return raw
-        .whereType<Map>()
-        .map((Map item) => InteractiveAction.fromJson(item.cast<String, dynamic>()))
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (Map<Object?, Object?> item) =>
+              InteractiveAction.fromJson(item.cast<String, dynamic>()),
+        )
         .where((InteractiveAction item) => item.label.isNotEmpty)
         .toList(growable: false);
   }
 
-  void _startBackgroundEvents(String conversationId) {
-    unawaited(_stopBackgroundEvents());
-    _backgroundSubscription = client.backgroundEvents(conversationId).listen(
-      (BridgeEvent event) {
-        final snapshot = event.conversation;
-        if (snapshot != null && activeConversation?.id == conversationId) {
-          activeConversation = snapshot;
-          notifyListeners();
-          unawaited(_persistCache());
-        }
-        if (event.type == 'ui.actions' && event.data['actions'] is List) {
-          interactiveActions = _parseInteractiveActions(event.data['actions']);
-          notifyListeners();
-        }
-      },
-      onError: (Object _) {
-        // The primary request path remains usable. Re-opening the conversation
-        // starts a fresh background stream, so a transient disconnect is not a
-        // user-facing fatal error.
-      },
+  Future<void> _startBackgroundEvents(String conversationId) async {
+    appLogger.debug(
+      'Starting background events for conversation $conversationId',
     );
+    await _stopBackgroundEvents();
+    _backgroundSubscription = client
+        .backgroundEvents(conversationId)
+        .listen(
+          (BridgeEvent event) {
+            final snapshot = event.conversation;
+            if (snapshot != null && activeConversation?.id == conversationId) {
+              activeConversation = snapshot;
+              notifyListeners();
+              unawaited(_persistCache());
+            }
+            if (event.type == 'ui.actions' && event.data['actions'] is List) {
+              interactiveActions = _parseInteractiveActions(
+                event.data['actions'],
+              );
+              notifyListeners();
+            }
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            appLogger.handle(
+              error,
+              stackTrace,
+              'Background events disconnected for conversation $conversationId',
+            );
+            // The primary request path remains usable. Re-opening the conversation
+            // starts a fresh background stream, so a transient disconnect is not a
+            // user-facing fatal error.
+          },
+        );
   }
 
   Future<void> _stopBackgroundEvents() async {
@@ -1126,14 +1213,19 @@ class ChatController extends ChangeNotifier {
     final summaryRaw = cache['conversations'];
     if (summaryRaw is List) {
       conversations = summaryRaw
-          .whereType<Map>()
-          .map((Map item) => ConversationSummary.fromJson(item.cast<String, dynamic>()))
+          .whereType<Map<Object?, Object?>>()
+          .map(
+            (Map<Object?, Object?> item) =>
+                ConversationSummary.fromJson(item.cast<String, dynamic>()),
+          )
           .where((ConversationSummary item) => item.id.isNotEmpty)
           .toList(growable: false);
     }
     final activeRaw = cache['active_conversation'];
     if (activeRaw is Map) {
-      activeConversation = ChatConversation.fromJson(activeRaw.cast<String, dynamic>());
+      activeConversation = ChatConversation.fromJson(
+        activeRaw.cast<String, dynamic>(),
+      );
     }
     final cachedModel = cache['selected_model']?.toString();
     if (cachedModel != null && cachedModel.isNotEmpty) {
@@ -1212,9 +1304,20 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_backgroundSubscription?.cancel());
     _client?.close();
     _actionsApi?.close();
     super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    // Network callbacks can finish after the page/controller is torn down.
+    // ChangeNotifier throws in that case, turning a harmless late response
+    // into an application crash.
+    if (!_disposed) {
+      super.notifyListeners();
+    }
   }
 }

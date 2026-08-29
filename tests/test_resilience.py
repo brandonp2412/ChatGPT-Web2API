@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import RateLimitError
-from chatgpt_web2api.resilience import retry_on_rate_limit
+from sloppa.cdp_driver import RateLimitError
+from sloppa.resilience import retry_on_rate_limit
 
 
 def _driver_with_dismiss(returns: bool):
@@ -135,7 +135,7 @@ async def test_backoff_uses_retry_after_when_smaller_than_cap(monkeypatch):
     async def fake_sleep(s):
         slept.append(s)
 
-    monkeypatch.setattr("chatgpt_web2api.resilience.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("sloppa.resilience.asyncio.sleep", fake_sleep)
 
     async def factory():
         if len(slept) == 0:

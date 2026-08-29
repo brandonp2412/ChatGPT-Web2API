@@ -13,7 +13,7 @@ Covers:
 
 import pytest
 
-from chatgpt_web2api.completion_detector import (
+from sloppa.completion_detector import (
     DetectorBudgets,
     classify_model,
 )
@@ -102,7 +102,7 @@ class TestDetectorBudgets:
     def test_from_config_default_model(self):
         """Building budgets from config + a default-class model yields the
         default first-content / stream-idle from config."""
-        from chatgpt_web2api.config import ChatGPTConfig
+        from sloppa.config import ChatGPTConfig
 
         cfg = ChatGPTConfig()
         budgets = DetectorBudgets.from_config(cfg, model="gpt-5-5")
@@ -112,7 +112,7 @@ class TestDetectorBudgets:
     def test_from_config_reasoning_model(self):
         """Building budgets from config + a reasoning model yields the reasoning
         first-content / stream-idle from config."""
-        from chatgpt_web2api.config import ChatGPTConfig
+        from sloppa.config import ChatGPTConfig
 
         cfg = ChatGPTConfig()
         budgets = DetectorBudgets.from_config(cfg, model="gpt-5-5-thinking")

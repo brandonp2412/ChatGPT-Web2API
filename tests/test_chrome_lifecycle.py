@@ -16,9 +16,9 @@ import asyncio
 
 import pytest
 
-from chatgpt_web2api import chrome as chrome_mod
-from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
-from chatgpt_web2api.chrome import ChromeProcess
+from sloppa import chrome as chrome_mod
+from sloppa.breakers import BreakerKind, BreakerRegistry
+from sloppa.chrome import ChromeProcess
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@ answer was in the DOM but has_action never fired, so every send stalled to
 90s and raised GenerationStuckError. Pinning completion-under-a-short-timeout
 makes selector drift a loud, fast CI failure instead of a slow stall.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_completion.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_completion.py -m e2e -v
 """
 
 import secrets
@@ -15,8 +15,8 @@ import time
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, GenerationStuckError
-from chatgpt_web2api.config import Config
+from sloppa.cdp_driver import CDPDriver, GenerationStuckError
+from sloppa.config import Config
 
 pytestmark = pytest.mark.e2e
 

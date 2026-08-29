@@ -20,11 +20,11 @@ VOLUME /data/cookies
 # Headless is OFF by default. Headless Chrome triggers ChatGPT's bot
 # detection (see README "Limitations"), so the default is headed mode.
 # On a display-less server, run with VNC/Xvfb (see docs/deployment.md) or
-# set W2A_HEADLESS=true only if you accept the anti-bot risk and have a
+# set SLOPPA_HEADLESS=true only if you accept the anti-bot risk and have a
 # cookie-injection fallback. See docker-entrypoint.sh.
-ENV W2A_HEADLESS=false
-ENV W2A_USER_DATA_DIR=/data/chrome-profile
-ENV W2A_PORT=8080
+ENV SLOPPA_HEADLESS=false
+ENV SLOPPA_USER_DATA_DIR=/data/chrome-profile
+ENV SLOPPA_PORT=8080
 
 EXPOSE 8080 9222
 

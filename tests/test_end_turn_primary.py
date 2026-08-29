@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.turn_anchor import TurnEndResult, TurnTextResult
+from sloppa.cdp_driver import CDPDriver
+from sloppa.turn_anchor import TurnEndResult, TurnTextResult
 
 
 def _make_driver():
@@ -33,12 +33,12 @@ def _make_driver():
 
 def _install_virtual_clock(monkeypatch, start=0.0):
     t = [start]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
     return t
 
 
@@ -208,7 +208,7 @@ def test_has_action_js_walks_depth_8():
     inspect the detector (the JS's new canonical home)."""
     import inspect
 
-    from chatgpt_web2api.completion_detector import CompletionDetector
+    from sloppa.completion_detector import CompletionDetector
 
     src = inspect.getsource(CompletionDetector.stream_until_complete)
     # The walk loop bound must be 8, not the old 4
@@ -227,7 +227,7 @@ def test_has_action_js_geometry_accepts_above_message():
     Phase 5 PR4: JS moved to CompletionDetector.stream_until_complete."""
     import inspect
 
-    from chatgpt_web2api.completion_detector import CompletionDetector
+    from sloppa.completion_detector import CompletionDetector
 
     src = inspect.getsource(CompletionDetector.stream_until_complete)
     # The geometry window must be widened to top-180 (the #12 short-answer case)
@@ -282,7 +282,7 @@ async def test_has_action_does_not_complete_when_backend_says_not_done(monkeypat
     # Backend is reachable but says NOT done — authoritative
     d._fetch_end_turn_for_turn = AsyncMock(return_value=TurnEndResult(status="not_ready"))
 
-    from chatgpt_web2api.cdp_driver import GenerationStuckError
+    from sloppa.cdp_driver import GenerationStuckError
 
     chunks = []
     with pytest.raises(GenerationStuckError):

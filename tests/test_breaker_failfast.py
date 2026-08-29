@@ -17,16 +17,16 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import chatgpt_web2api.mcp_server as mod
-from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry, CircuitOpenError
-from chatgpt_web2api.config import Config
+import sloppa.mcp_server as mod
+from sloppa.breakers import BreakerKind, BreakerRegistry, CircuitOpenError
+from sloppa.config import Config
 
 # ── REST: _error_response maps CircuitOpenError → 503 ─────────────────
 
 
 def _server():
     """An APIServer with a throwaway config + driver (only _error_response used)."""
-    from chatgpt_web2api.api_server import APIServer
+    from sloppa.api_server import APIServer
 
     return APIServer(Config.load(None), MagicMock())
 
@@ -76,7 +76,7 @@ def _make_mcp_server_with_open_breaker():
 
     # If the handler somehow runs, yield a benign chunk (it should NOT).
     async def _stream(text, timeout=120, *, budgets=None, model=None):
-        from chatgpt_web2api.cdp_driver import StreamChunk
+        from sloppa.cdp_driver import StreamChunk
 
         yield StreamChunk(delta="should-not-reach")
         yield StreamChunk(delta="", finish_reason="stop")
@@ -123,7 +123,7 @@ async def test_mcp_open_breaker_returns_circuit_open_error():
 @pytest.mark.asyncio
 async def test_mcp_closed_breaker_does_not_fail_fast(monkeypatch):
     """When all breakers are closed, tools proceed normally — no circuit_open."""
-    import chatgpt_web2api.resilience as res
+    import sloppa.resilience as res
 
     async def _noop(_s):
         return None
@@ -141,7 +141,7 @@ async def test_mcp_closed_breaker_does_not_fail_fast(monkeypatch):
     driver._current_model = None
 
     async def _stream(text, timeout=120, *, budgets=None, model=None):
-        from chatgpt_web2api.cdp_driver import StreamChunk
+        from sloppa.cdp_driver import StreamChunk
 
         yield StreamChunk(delta="ok")
         yield StreamChunk(delta="", finish_reason="stop")
@@ -178,7 +178,7 @@ async def test_rest_post_lock_check_catches_race(monkeypatch):
     post-lock check catches it. select_model / navigate_new_chat /
     send_and_stream must NOT be called.
     """
-    import chatgpt_web2api.api_server as srv
+    import sloppa.api_server as srv
 
     server = srv.APIServer.__new__(srv.APIServer)
     server._last_conv_id = None
@@ -228,7 +228,7 @@ async def test_rest_post_lock_check_catches_race(monkeypatch):
         async def __aexit__(self, *a):
             return False
 
-    import chatgpt_web2api.api_server as mod
+    import sloppa.api_server as mod
 
     monkeypatch.setattr(mod, "MutationLock", _RacingLock)
 
@@ -260,7 +260,7 @@ async def test_rest_auth_recovery_probes_then_proceeds(monkeypatch):
     """When AUTH_EXPIRED is open, the preflight probes recover_auth() before
     failing fast. If recovery succeeds (user logged back in), the breaker is
     reset and the request proceeds normally — no 503."""
-    import chatgpt_web2api.api_server as srv
+    import sloppa.api_server as srv
 
     server = srv.APIServer.__new__(srv.APIServer)
     server._last_conv_id = None
@@ -316,7 +316,7 @@ async def test_rest_auth_recovery_probes_then_proceeds(monkeypatch):
         async def __aexit__(self, *a):
             return False
 
-    import chatgpt_web2api.api_server as mod
+    import sloppa.api_server as mod
 
     monkeypatch.setattr(mod, "MutationLock", _NullLock)
 
@@ -342,7 +342,7 @@ async def test_rest_auth_recovery_probes_then_proceeds(monkeypatch):
 async def test_rest_auth_recovery_fails_still_fail_fasts():
     """When AUTH_EXPIRED is open and recovery fails, the preflight still
     fails fast with 503 circuit_open."""
-    import chatgpt_web2api.api_server as srv
+    import sloppa.api_server as srv
 
     server = srv.APIServer.__new__(srv.APIServer)
     server._last_conv_id = None
@@ -386,8 +386,8 @@ async def test_rest_auth_recovery_fails_still_fail_fasts():
 async def test_driver_recover_auth_resets_on_successful_refresh(monkeypatch):
     """driver.recover_auth() calls _refresh_token and resets AUTH_EXPIRED on
     success; on failure leaves the breaker open."""
-    from chatgpt_web2api.backend_client import BackendClient
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.backend_client import BackendClient
+    from sloppa.cdp_driver import CDPDriver
 
     driver = CDPDriver.__new__(CDPDriver)
     driver._breakers = BreakerRegistry()

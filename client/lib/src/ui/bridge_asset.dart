@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -184,18 +183,18 @@ class _BridgeAssetDownloadButtonState extends State<BridgeAssetDownloadButton> {
         return;
       }
       final suggested = _safeFileName(widget.asset.fileName ?? 'attachment');
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         dialogTitle: 'Save attachment',
         fileName: suggested,
+        bytes: bytes,
       );
-      if (path == null || path.isEmpty) {
+      if (path == null) {
         return;
       }
-      await File(path).writeAsBytes(bytes, flush: true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Attachment saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Attachment saved')));
       }
     } on Object catch (error) {
       if (mounted) {
@@ -223,7 +222,8 @@ Future<Uint8List> _fetchAssetBytes({
     conversationId: conversationId,
   );
   final bridge = settings.baseUri;
-  final sameBridge = resolved.scheme == bridge.scheme &&
+  final sameBridge =
+      resolved.scheme == bridge.scheme &&
       resolved.host == bridge.host &&
       resolved.port == bridge.port;
   final response = await http.get(

@@ -14,7 +14,12 @@ return.
 This does NOT mutate ChatGPT state — it only intercepts the outgoing request
 to read its body, then lets it proceed unchanged.
 """
-import asyncio, json, urllib.request, time, websockets
+import asyncio
+import json
+import time
+import urllib.request
+
+import websockets
 
 CDP = 9222
 BRIDGE = "http://127.0.0.1:8080"
@@ -82,7 +87,8 @@ async def main():
     async with websockets.connect(ws_url, max_size=None) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         async def evaluate(expr, timeout_ms=10000):
             await ws.send(json.dumps({"id": nid(), "method": "Runtime.evaluate",

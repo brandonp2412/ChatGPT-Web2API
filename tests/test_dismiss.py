@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
+from sloppa.cdp_driver import CDPDriver
 
 
 def _driver_with_js_sequence(js_returns: list[str]):

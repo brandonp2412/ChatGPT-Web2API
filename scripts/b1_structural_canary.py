@@ -17,7 +17,6 @@ import asyncio
 import json
 import urllib.request
 
-
 CDP = 9222
 BRIDGE = "http://127.0.0.1:8090"
 POOL_SIZE = 2
@@ -32,8 +31,8 @@ def count_chatgpt_tabs() -> list[dict]:
 
 async def client_session(label: str, retries: int = 3) -> tuple[bool, int]:
     """Connect one MCP SSE client, call list_models, return (success, attempts)."""
-    from mcp.client.sse import sse_client
     from mcp.client.session import ClientSession
+    from mcp.client.sse import sse_client
 
     async with sse_client(f"{BRIDGE}/sse") as (read, write):
         async with ClientSession(read, write) as session:
@@ -75,7 +74,7 @@ async def main():
     # Verdict
     distinct = bool(new_a) and bool(new_b) and new_a.isdisjoint(new_b)
     total_new = len(after_b) - len(initial)
-    print(f"\n=== STRUCTURAL CANARY VERDICT ===")
+    print("\n=== STRUCTURAL CANARY VERDICT ===")
     print(f"A success: {ok_a} (attempts: {att_a})")
     print(f"B success: {ok_b} (attempts: {att_b})")
     print(f"A target: {new_a}")

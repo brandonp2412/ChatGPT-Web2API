@@ -1,4 +1,4 @@
-# ChatGPT-Web2API Roadmap
+# Sloppa Roadmap
 
 > **Status:** Active. Authored 2026-06-25 after a scope-correction review that
 > removed work already shipped (honest `/health`, rate-limit retry) and moved
@@ -13,7 +13,7 @@
   comes *after* the breaker policy (Phase 4). We instrument the monolith, prove
   the behavior is stable, then move it.
 - **Lifecycle logic lives in the repo-owned CLI, not in hooks.** ZCode hooks are
-  thin one-liners. Testable, idempotent logic belongs in `chatgpt-web2api ensure`.
+  thin one-liners. Testable, idempotent logic belongs in `sloppa ensure`.
 - **REST owns Chrome. SSE attaches.** This invariant holds across every phase.
   Nothing else launches Chrome.
 - **Don't re-scope shipped work.** If a phase's deliverable already exists in
@@ -90,7 +90,7 @@ process multiplier (N ZCode sessions × stdio = N MCP children × N tabs).
 ### Deliverables — all shipped
 
 1. ✅ **Document SSE config** (recommended) — README now presents SSE first
-   with the `chatgpt-web2api-sse` snippet and launch command.
+   with the `sloppa-sse` snippet and launch command.
 2. ✅ **Document stdio** as compatibility / dev-debug mode only — README
    repositions stdio under "Alternative," noting one MCP child per session.
 3. ✅ **Integration tests** for SSE (`tests/test_e2e_sse.py`, e2e-gated) —
@@ -127,16 +127,16 @@ selector drifted (3rd time), no completion signal fired and the loop ran to
 the 120s deadline. Fix resolves `conv_id_for_check` mid-loop from the live
 URL. Live SSE `chat_completion` now completes in 2–12s (was 120s+/timeout).
 
-Diagnosis details: [issue #10 comment](https://github.com/Octo-Lex/ChatGPT-Web2API/issues/10#issuecomment-4796158081).
+Diagnosis details: [issue #10 comment](https://github.com/Octo-Lex/Sloppa/issues/10#issuecomment-4796158081).
 Remaining follow-up: the DOM `has_action` selector is still dead — tracked in #12.
 
 ---
 
-## Phase 3 — Add `chatgpt-web2api ensure`  ✅ DONE
+## Phase 3 — Add `sloppa ensure`  ✅ DONE
 
 **Goal:** let ZCode hooks bootstrap the full stack with a thin one-liner.
 
-Shipped as `chatgpt-web2api ensure` in `src/chatgpt_web2api/ensure.py`, wired
+Shipped as `sloppa ensure` in `src/sloppa/ensure.py`, wired
 into the `__main__.py` subcommand dispatch. Point-in-time reconcile: checks
 REST + SSE, starts whichever is missing, verifies SSE via real MCP handshake,
 exits 0 when ready. Lock-protected (SSE-port-keyed startup lock, bounded
@@ -152,7 +152,7 @@ handshake-failed path stops the existing listener before relaunch.
 ### Command
 
 ```text
-chatgpt-web2api ensure [--rest-port 8080] [--mcp-sse-port 8090]
+sloppa ensure [--rest-port 8080] [--mcp-sse-port 8090]
 ```
 
 Slots into the existing `{"start", "inject-cookies", "doctor"}` subcommand
@@ -269,7 +269,7 @@ behavior change, then wire the real failure signals, then add operator-facing
 status policy.
 
 - ✅ **PR1 (#18) — breaker registry + `/health` exposure.** Shipped
-  `src/chatgpt_web2api/breakers.py`: a `BreakerRegistry` keyed by `BreakerKind`
+  `src/sloppa/breakers.py`: a `BreakerRegistry` keyed by `BreakerKind`
   with `record_failure` / `record_success` / `trip` / `is_open` / `snapshot`.
   `/health` gained a `breakers` snapshot field. Zero behavior change at the
   time: `/health` always reported all breakers closed. Proved the plumbing
@@ -296,7 +296,7 @@ status policy.
   recover/restart (with a cooldown-boundary re-fetch); degraded without breaker
   info → legacy 20s-poll-then-restart. Adds narrow **ensure-only** config
   tunables (`EnsureConfig`: poll interval/budget, cooldown grace) via
-  `ensure_*` flat keys + `W2A_ENSURE_*` env; config `port`/`cdp_port` never
+  `ensure_*` flat keys + `SLOPPA_ENSURE_*` env; config `port`/`cdp_port` never
   override explicit `run_ensure` args. Exit codes: `0` ready, `1` generic
   failure, `2` auth/login needed. Runtime-validated on `2668243`.
 
@@ -307,7 +307,7 @@ PR3 (#20) →  status policy + breaker-aware ensure + ensure-only tunables
 ```
 
 > **Tunables scope note:** PR3 shipped **ensure-only** tunables, NOT
-> `BreakerPolicy` threshold/window/cooldown config. `W2A_BREAKER_*` keys do not
+> `BreakerPolicy` threshold/window/cooldown config. `SLOPPA_BREAKER_*` keys do not
 > exist. Threshold constants stay in `breakers.py` until real-world tuning data
 > shows the defaults need adjustment (deferred follow-up E).
 
@@ -344,7 +344,7 @@ D. MCP /messages trailing-slash redirect
    redirect. Real MCP clients add the slash today.
 
 E. BreakerPolicy threshold config
-   Still defer W2A_BREAKER_* threshold/window/cooldown tunables unless
+   Still defer SLOPPA_BREAKER_* threshold/window/cooldown tunables unless
    production data shows the defaults need tuning. Do NOT add them speculatively.
 ```
 
@@ -432,7 +432,7 @@ hooks are the primary path.
 systemd (Linux), launchd (macOS), and Task Scheduler / NSSM (Windows), with two
 styles: `ensure` on a timer (mirrors the ZCode hook) and `start` as a long-lived
 service. Documents the recommended reconcile command
-(`chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222`),
+(`sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222`),
 the `/health`-gated restart policy (restart on process exit, not on `degraded`),
 log capture, and the env-var reference. **Docs only** — no supervisor scripts
 installed, no daemonization code, no package entrypoint changes. Linked from

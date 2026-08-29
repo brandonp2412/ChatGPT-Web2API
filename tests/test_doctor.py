@@ -8,7 +8,7 @@ name the function) and prints the evidence an AI repair agent reads.
 import json
 from pathlib import Path
 
-from chatgpt_web2api.doctor import (
+from sloppa.doctor import (
     latest_artifact_for,
     list_broken_functions,
     print_evidence,
@@ -68,7 +68,7 @@ def test_print_evidence_outputs_key_fields(capsys, tmp_path):
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from chatgpt_web2api import doctor_verify
+from sloppa import doctor_verify
 
 
 def test_verify_reports_pass_when_healthy(monkeypatch, capsys):

@@ -32,7 +32,8 @@ async def main(max_seconds: int = 600) -> None:
     )
     page = next((t for t in targets if t.get("type") == "page" and "chatgpt.com" in t.get("url", "")), None)
     if not page:
-        print("ERROR: no chatgpt page", file=sys.stderr); return
+        print("ERROR: no chatgpt page", file=sys.stderr)
+        return
     ws_url = page["webSocketDebuggerUrl"]
     print(f"[v5] page ws: {ws_url}", flush=True)
 
@@ -66,7 +67,7 @@ async def main(max_seconds: int = 600) -> None:
                         return int(r.get("result", {}).get("result", {}).get("value", "0"))
                     except Exception:
                         return 0
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return 0
         return 0
 
@@ -98,7 +99,7 @@ async def main(max_seconds: int = 600) -> None:
                     r = json.loads(raw)
                     if r.get("id") == this_id:
                         return r.get("result", {}).get("body", "")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     return "(timeout)"
             return "(timeout)"
 
@@ -114,7 +115,7 @@ async def main(max_seconds: int = 600) -> None:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
                 evt = json.loads(raw)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Poll on the SEPARATE socket — never touches the capture socket
                 if not detected and time.monotonic() - last_check > 4:
                     last_check = time.monotonic()

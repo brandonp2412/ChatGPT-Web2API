@@ -37,18 +37,16 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/brandonp2412/ChatGPT-Web2API"
-Repository = "https://github.com/brandonp2412/ChatGPT-Web2API"
-Issues = "https://github.com/brandonp2412/ChatGPT-Web2API/issues"
+Homepage = "https://github.com/brandonp2412/Sloppa"
+Repository = "https://github.com/brandonp2412/Sloppa"
+Issues = "https://github.com/brandonp2412/Sloppa/issues"
 
 [project.scripts]
-sloppa = "chatgpt_web2api.__main__:main"
-sloppa-mcp = "chatgpt_web2api.mcp_server:main"
+sloppa = "sloppa.__main__:main"
+sloppa-mcp = "sloppa.mcp_server:main"
 # Compatibility aliases while existing installs/scripts migrate.
-sloppa-backend = "chatgpt_web2api.__main__:main"
-sloppa-backend-mcp = "chatgpt_web2api.mcp_server:main"
-chatgpt-web2api = "chatgpt_web2api.__main__:main"
-chatgpt-web2api-mcp = "chatgpt_web2api.mcp_server:main"
+sloppa-backend = "sloppa.__main__:main"
+sloppa-backend-mcp = "sloppa.mcp_server:main"
 
 [project.optional-dependencies]
 dev = [
@@ -58,7 +56,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/chatgpt_web2api"]
+packages = ["src/sloppa"]
 
 [tool.ruff]
 line-length = 100
@@ -77,12 +75,12 @@ ignore = ["E501", "E402"]
 [tool.ruff.lint.per-file-ignores]
 # ToolName uses str+Enum (pre-StrEnum idiom) — UP042 would force a refactor
 # of the enum's serialization; out of scope for a lint-gate commit.
-"src/chatgpt_web2api/mcp_server.py" = ["UP042"]
+"src/sloppa/mcp_server.py" = ["UP042"]
 # conftest redefines event_loop for pytest-asyncio — intentional fixture override.
 "tests/conftest.py" = ["F811"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 markers = [
-    "e2e: end-to-end tests against a real ChatGPT account (opt-in via W2A_E2E_RUN=1; mutates the account)",
+    "e2e: end-to-end tests against a real ChatGPT account (opt-in via SLOPPA_E2E_RUN=1; mutates the account)",
 ]

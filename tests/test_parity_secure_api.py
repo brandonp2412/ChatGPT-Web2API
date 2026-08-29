@@ -1,4 +1,4 @@
-from chatgpt_web2api.parity_secure_api import _is_allowed_asset_url
+from sloppa.parity_secure_api import _is_allowed_asset_url
 
 
 def test_asset_proxy_accepts_known_openai_hosts():

@@ -13,12 +13,12 @@ a real captured mapping via the CDP instrumentation scripts.
 """
 from __future__ import annotations
 
-from chatgpt_web2api.backend_projection import (
+from sloppa.backend_projection import (
     CONVERSATION_PROJECTION_JS,
     PROJECTED_SCHEMA_FIELDS,
     TURN_PROJECTION_LIMIT,
 )
-from chatgpt_web2api.turn_anchor import (
+from sloppa.turn_anchor import (
     TurnAnchor,
     select_end_turn_for_turn,
     select_text_for_turn,
@@ -67,14 +67,14 @@ class TestProjectionLimit:
 
     def test_limit_env_overridable(self, monkeypatch):
         # Re-import to pick up env. (The module reads os.getenv at import.)
-        monkeypatch.setenv("W2A_TURN_PROJECTION_LIMIT", "100")
+        monkeypatch.setenv("SLOPPA_TURN_PROJECTION_LIMIT", "100")
         import importlib
 
-        import chatgpt_web2api.backend_projection as mod
+        import sloppa.backend_projection as mod
         importlib.reload(mod)
         assert mod.TURN_PROJECTION_LIMIT == 100
         # Restore.
-        monkeypatch.delenv("W2A_TURN_PROJECTION_LIMIT", raising=False)
+        monkeypatch.delenv("SLOPPA_TURN_PROJECTION_LIMIT", raising=False)
         importlib.reload(mod)
 
 

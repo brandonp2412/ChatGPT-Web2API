@@ -8,7 +8,7 @@ if [ -f "$COOKIE_FILE" ]; then
     echo "Found cookies file, injecting..."
     
     # Start proxy in background (Chrome will launch)
-    chatgpt-web2api "$@" &
+    sloppa "$@" &
     PROXY_PID=$!
     
     # Wait for Chrome CDP to be ready
@@ -21,7 +21,7 @@ if [ -f "$COOKIE_FILE" ]; then
     done
     
     # Inject cookies
-    chatgpt-web2api inject-cookies "$COOKIE_FILE" "$@"
+    sloppa inject-cookies "$COOKIE_FILE" "$@"
     
     # Let cookies propagate to session
     sleep 3
@@ -31,5 +31,5 @@ if [ -f "$COOKIE_FILE" ]; then
 else
     echo "No cookies file found. Starting without auth."
     echo "Mount cookies at /data/cookies/cookies.json for headless auth."
-    exec chatgpt-web2api "$@"
+    exec sloppa "$@"
 fi

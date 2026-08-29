@@ -27,7 +27,8 @@ async def main(listen_seconds: int) -> None:
     )
     page = next((t for t in targets if t.get("type") == "page" and "chatgpt.com" in t.get("url", "")), None)
     if not page:
-        print("ERROR: no chatgpt page", file=sys.stderr); return
+        print("ERROR: no chatgpt page", file=sys.stderr)
+        return
     ws_url = page["webSocketDebuggerUrl"]
     print(f"[v3] page ws: {ws_url}", flush=True)
 
@@ -50,16 +51,18 @@ async def main(listen_seconds: int) -> None:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 evt = json.loads(raw)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             m = evt.get("method")
             req = None
             src = None
             if m == "Network.requestWillBeSent":
-                req = evt["params"].get("request", {}); src = "N"
+                req = evt["params"].get("request", {})
+                src = "N"
             elif m == "Fetch.requestPaused":
-                req = evt["params"].get("request", {}); src = "F"
+                req = evt["params"].get("request", {})
+                src = "F"
                 # Always resume
                 rid = evt["params"].get("requestId")
                 mid += 1

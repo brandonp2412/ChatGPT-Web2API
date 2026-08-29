@@ -47,5 +47,17 @@ void main() {
         'https://example.com',
       );
     });
+
+    test('rejects empty and non-network URLs', () {
+      expect(BridgeSettings.validateBaseUrl(''), isNotNull);
+      expect(BridgeSettings.validateBaseUrl('file:///tmp/bridge'), isNotNull);
+    });
+
+    test('rejects malformed ports', () {
+      expect(
+        BridgeSettings.validateBaseUrl('https://bridge.example.com:bad'),
+        isNotNull,
+      );
+    });
   });
 }

@@ -27,11 +27,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.completion_detector import (
+from sloppa.completion_detector import (
     PHASE_STALL_SECONDS,
     CompletionDetector,
 )
-from chatgpt_web2api.turn_anchor import TurnAnchor, TurnEndResult
+from sloppa.turn_anchor import TurnAnchor, TurnEndResult
 
 
 def _make_detector():
@@ -75,7 +75,7 @@ def test_stream_until_complete_is_keyword_only():
 
 def test_driver_wires_completion():
     """CDPDriver.__init__ must construct the detector with itself."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     assert isinstance(d._completion, CompletionDetector), (
@@ -151,8 +151,8 @@ def test_per_call_results_reset_on_each_call():
 def test_is_rate_limited_text_reexported_identity():
     """is_rate_limited_text must remain importable from cdp_driver, and it must
     be the SAME object (identity) as the one in completion_detector."""
-    from chatgpt_web2api.cdp_driver import is_rate_limited_text as drv_fn
-    from chatgpt_web2api.completion_detector import is_rate_limited_text as det_fn
+    from sloppa.cdp_driver import is_rate_limited_text as drv_fn
+    from sloppa.completion_detector import is_rate_limited_text as det_fn
 
     assert drv_fn is det_fn, "is_rate_limited_text must be re-exported by identity"
     assert drv_fn("Too many requests") is True
@@ -162,7 +162,7 @@ def test_is_rate_limited_text_reexported_identity():
 def test_phase_stall_seconds_reexported_equal():
     """PHASE_STALL_SECONDS must remain importable from cdp_driver with the same
     value (equality, not identity — ints are not guaranteed interned)."""
-    from chatgpt_web2api.cdp_driver import PHASE_STALL_SECONDS as drv_val
+    from sloppa.cdp_driver import PHASE_STALL_SECONDS as drv_val
 
     assert drv_val == PHASE_STALL_SECONDS == 90
 
@@ -217,14 +217,14 @@ def test_no_cdp_driver_import_at_module_load():
     completion_detector). Error classes / StreamChunk are imported lazily inside
     the method body. Verify by inspecting the module's source for a top-level
     cdp_driver import."""
-    src = inspect.getsource(importlib_import_module("chatgpt_web2api.completion_detector"))
+    src = inspect.getsource(importlib_import_module("sloppa.completion_detector"))
     # A `from .cdp_driver import` at column 0 (module level, not inside a def)
     # would be a circular-import violation. The lazy import is indented inside
     # stream_until_complete, so it does not start at column 0.
     for line in src.splitlines():
         stripped = line.lstrip()
         if stripped.startswith("from .cdp_driver import") or stripped.startswith(
-            "from chatgpt_web2api.cdp_driver import"
+            "from sloppa.cdp_driver import"
         ):
             assert line.startswith(" "), (
                 f"cdp_driver import must be lazy (indented inside a method), "

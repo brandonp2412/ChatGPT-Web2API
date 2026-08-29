@@ -1,4 +1,4 @@
-from chatgpt_web2api.parity_models import (
+from sloppa.parity_models import (
     current_branch_ids,
     normalize_conversation,
 )
@@ -97,3 +97,42 @@ def test_normalize_emits_image_and_citation_blocks():
 
     citations = next(block for block in assistant["blocks"] if block["type"] == "citations")
     assert citations["items"][0]["url"] == "https://example.com/source"
+
+
+def test_normalize_drops_large_opaque_metadata():
+    raw = _conversation()
+    raw["mapping"]["a2"]["message"]["metadata"] = {
+        "status": "finished",
+        "huge_internal_payload": "x" * 100_000,
+    }
+
+    data = normalize_conversation(raw)
+
+    assert data["messages"][-1]["metadata"] == {"status": "finished"}
+    assert "huge_internal_payload" not in str(data)
+
+
+def test_normalize_limits_initial_transcript_size():
+    raw = {"id": "large", "current_node": "n200", "mapping": {}}
+    previous = None
+    for index in range(201):
+        node_id = f"n{index}"
+        raw["mapping"][node_id] = {
+            "id": node_id,
+            "parent": previous,
+            "children": [f"n{index + 1}"] if index < 200 else [],
+            "message": {
+                "id": f"m{index}",
+                "author": {"role": "user"},
+                "content": {"content_type": "text", "parts": [str(index)]},
+                "metadata": {},
+            },
+        }
+        previous = node_id
+
+    data = normalize_conversation(raw)
+
+    assert len(data["messages"]) == 200
+    assert data["messages"][0]["text"] == "1"
+    assert data["messages_truncated"] is True
+    assert data["messages_omitted"] == 1

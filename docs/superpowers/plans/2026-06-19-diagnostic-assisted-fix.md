@@ -4,7 +4,7 @@
 
 **Goal:** Add a reactive mechanism that captures diagnostic evidence when a driver function breaks against the live ChatGPT API, plus a `doctor` subcommand that prints the evidence and re-verifies fixes — so a human + AI agent can repair drift fast.
 
-**Architecture:** A `@diagnose` decorator wraps each `CDPDriver` method, classifying its result as healthy/broken on the error path of real calls. On breakage it writes a redacted JSON artifact under `~/.chatgpt-web2api/diagnostics/`. A new `chatgpt-web2api doctor <function>` subcommand prints the latest artifact and (via `--verify`) re-runs the function live. Fix-proposing is done by an external AI agent reading the printed evidence — the project ships capture + doctor, not an AI.
+**Architecture:** A `@diagnose` decorator wraps each `CDPDriver` method, classifying its result as healthy/broken on the error path of real calls. On breakage it writes a redacted JSON artifact under `~/.sloppa/diagnostics/`. A new `sloppa doctor <function>` subcommand prints the latest artifact and (via `--verify`) re-runs the function live. Fix-proposing is done by an external AI agent reading the printed evidence — the project ships capture + doctor, not an AI.
 
 **Tech Stack:** Python 3.11+, aiohttp/websockets (existing), pytest + pytest-asyncio (existing), stdlib `json`/`pathlib`/`re` for capture and redaction.
 
@@ -12,10 +12,10 @@
 
 ## File Structure
 
-- **Create:** `src/chatgpt_web2api/diagnostics.py` — the detector (`@diagnose` decorator), artifact capture, redaction, expected-shape registry, volume cap. Pure, no browser dependency.
-- **Create:** `src/chatgpt_web2api/doctor.py` — the `doctor` subcommand logic: read/print artifacts, `--verify` runner.
-- **Modify:** `src/chatgpt_web2api/cdp_driver.py` — apply `@diagnose` to the 15 driver methods.
-- **Modify:** `src/chatgpt_web2api/__main__.py` — register the `doctor` subcommand.
+- **Create:** `src/sloppa/diagnostics.py` — the detector (`@diagnose` decorator), artifact capture, redaction, expected-shape registry, volume cap. Pure, no browser dependency.
+- **Create:** `src/sloppa/doctor.py` — the `doctor` subcommand logic: read/print artifacts, `--verify` runner.
+- **Modify:** `src/sloppa/cdp_driver.py` — apply `@diagnose` to the 15 driver methods.
+- **Modify:** `src/sloppa/__main__.py` — register the `doctor` subcommand.
 - **Test:** `tests/test_diagnostics.py` — detector, redaction, artifact shape, volume cap (unit).
 - **Test:** `tests/test_doctor.py` — artifact reading, evidence printing, verify runner (unit, mocked driver).
 - **Test:** `tests/test_e2e_doctor.py` — opt-in live capture + verify round-trip.
@@ -25,7 +25,7 @@
 ## Task 1: Diagnostics module — expected-shape registry + classifier
 
 **Files:**
-- Create: `src/chatgpt_web2api/diagnostics.py`
+- Create: `src/sloppa/diagnostics.py`
 - Test: `tests/test_diagnostics.py`
 
 - [ ] **Step 1: Write the failing test for result classification**
@@ -36,7 +36,7 @@ Create `tests/test_diagnostics.py`:
 """Tests for the diagnostic detector + capture."""
 import pytest
 
-from chatgpt_web2api.diagnostics import classify_result, EXPECTED_SHAPES
+from sloppa.diagnostics import classify_result, EXPECTED_SHAPES
 
 
 def test_classify_healthy_list():
@@ -85,7 +85,7 @@ Expected: FAIL with `ImportError: cannot import name 'classify_result'`
 
 - [ ] **Step 3: Write the minimal implementation**
 
-Create `src/chatgpt_web2api/diagnostics.py`:
+Create `src/sloppa/diagnostics.py`:
 
 ```python
 """Reactive diagnostics: detect broken driver calls + capture evidence.
@@ -176,7 +176,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/chatgpt_web2api/diagnostics.py tests/test_diagnostics.py
+git add src/sloppa/diagnostics.py tests/test_diagnostics.py
 git commit -m "feat(diagnostics): add result classifier + expected-shape registry"
 ```
 
@@ -185,7 +185,7 @@ git commit -m "feat(diagnostics): add result classifier + expected-shape registr
 ## Task 2: Artifact capture + redaction + volume cap
 
 **Files:**
-- Modify: `src/chatgpt_web2api/diagnostics.py`
+- Modify: `src/sloppa/diagnostics.py`
 - Test: `tests/test_diagnostics.py` (append)
 
 - [ ] **Step 1: Write the failing tests for redaction + capture**
@@ -196,7 +196,7 @@ Append to `tests/test_diagnostics.py`:
 import json
 from pathlib import Path
 
-from chatgpt_web2api.diagnostics import redact, capture_artifact, DiagnosticsDir
+from sloppa.diagnostics import redact, capture_artifact, DiagnosticsDir
 
 
 def test_redact_strips_auth_tokens():
@@ -260,7 +260,7 @@ Expected: FAIL with `ImportError: cannot import name 'redact'`
 
 - [ ] **Step 3: Write the implementation**
 
-Append to `src/chatgpt_web2api/diagnostics.py`:
+Append to `src/sloppa/diagnostics.py`:
 
 ```python
 import json
@@ -310,7 +310,7 @@ class DiagnosticsDir:
     """Writes + reads diagnostic artifacts under a base directory."""
 
     def __init__(self, base: Path | None = None, max_per_function: int = 5) -> None:
-        self.base = Path(base) if base else Path.home() / ".chatgpt-web2api" / "diagnostics"
+        self.base = Path(base) if base else Path.home() / ".sloppa" / "diagnostics"
         self.base.mkdir(parents=True, exist_ok=True)
         self.max_per_function = max_per_function
 
@@ -353,7 +353,7 @@ Expected: PASS (9 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/chatgpt_web2api/diagnostics.py tests/test_diagnostics.py
+git add src/sloppa/diagnostics.py tests/test_diagnostics.py
 git commit -m "feat(diagnostics): add artifact capture with redaction + volume cap"
 ```
 
@@ -362,8 +362,8 @@ git commit -m "feat(diagnostics): add artifact capture with redaction + volume c
 ## Task 3: The `@diagnose` decorator — wire detection into driver methods
 
 **Files:**
-- Modify: `src/chatgpt_web2api/diagnostics.py`
-- Modify: `src/chatgpt_web2api/cdp_driver.py` (apply decorator to 15 methods)
+- Modify: `src/sloppa/diagnostics.py`
+- Modify: `src/sloppa/cdp_driver.py` (apply decorator to 15 methods)
 - Test: `tests/test_diagnostics.py` (append)
 
 - [ ] **Step 1: Write the failing test for the decorator**
@@ -374,13 +374,13 @@ Append to `tests/test_diagnostics.py`:
 import asyncio
 from unittest.mock import MagicMock, AsyncMock
 
-from chatgpt_web2api.diagnostics import diagnose, set_capture_enabled
+from sloppa.diagnostics import diagnose, set_capture_enabled
 
 
 def test_diagnose_decorator_passes_through_healthy(monkeypatch, tmp_path):
     """A healthy result is returned unchanged; no artifact written."""
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR",
-                        __import__("chatgpt_web2api.diagnostics", fromlist=["DiagnosticsDir"]).DiagnosticsDir(base=tmp_path))
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR",
+                        __import__("sloppa.diagnostics", fromlist=["DiagnosticsDir"]).DiagnosticsDir(base=tmp_path))
 
     class Stub:
         @diagnose("get_models")
@@ -394,8 +394,8 @@ def test_diagnose_decorator_passes_through_healthy(monkeypatch, tmp_path):
 
 def test_diagnose_decorator_captures_on_broken(monkeypatch, tmp_path):
     """A broken result is still returned, but an artifact is captured."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR", DiagnosticsDir(base=tmp_path))
+    from sloppa.diagnostics import DiagnosticsDir
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR", DiagnosticsDir(base=tmp_path))
 
     class Stub:
         async def _js(self_inner, expr, timeout=15):
@@ -417,8 +417,8 @@ def test_diagnose_decorator_captures_on_broken(monkeypatch, tmp_path):
 
 def test_diagnose_capture_is_disabled_by_default(monkeypatch, tmp_path):
     """Capture is OFF unless enabled (avoid surprising disk writes in prod)."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR", DiagnosticsDir(base=tmp_path))
+    from sloppa.diagnostics import DiagnosticsDir
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR", DiagnosticsDir(base=tmp_path))
     set_capture_enabled(False)
 
     class Stub:
@@ -438,7 +438,7 @@ Expected: FAIL with `ImportError: cannot import name 'diagnose'`
 
 - [ ] **Step 3: Write the decorator implementation**
 
-Append to `src/chatgpt_web2api/diagnostics.py`:
+Append to `src/sloppa/diagnostics.py`:
 
 ```python
 import asyncio
@@ -531,7 +531,7 @@ Expected: PASS (12 tests)
 
 - [ ] **Step 5: Apply `@diagnose` to the 15 driver methods**
 
-In `src/chatgpt_web2api/cdp_driver.py`, add the import and decorate each method. Example for the two methods with JS-capture:
+In `src/sloppa/cdp_driver.py`, add the import and decorate each method. Example for the two methods with JS-capture:
 
 ```python
 from .diagnostics import diagnose
@@ -564,7 +564,7 @@ Expected: PASS (all existing + 12 new). Decorator is inert when capture is off (
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/chatgpt_web2api/diagnostics.py src/chatgpt_web2api/cdp_driver.py tests/test_diagnostics.py
+git add src/sloppa/diagnostics.py src/sloppa/cdp_driver.py tests/test_diagnostics.py
 git commit -m "feat(diagnostics): add @diagnose decorator; apply to driver methods"
 ```
 
@@ -573,8 +573,8 @@ git commit -m "feat(diagnostics): add @diagnose decorator; apply to driver metho
 ## Task 4: Enable capture at server startup (opt-in via env)
 
 **Files:**
-- Modify: `src/chatgpt_web2api/diagnostics.py`
-- Modify: `src/chatgpt_web2api/service.py`
+- Modify: `src/sloppa/diagnostics.py`
+- Modify: `src/sloppa/service.py`
 - Test: `tests/test_diagnostics.py` (append)
 
 - [ ] **Step 1: Write the failing test for env-gated enablement**
@@ -583,13 +583,13 @@ Append to `tests/test_diagnostics.py`:
 
 ```python
 def test_capture_enabled_by_env(monkeypatch):
-    """W2A_DIAGNOSE=1 enables capture at startup."""
-    import chatgpt_web2api.diagnostics as dmod
-    monkeypatch.setenv("W2A_DIAGNOSE", "1")
+    """SLOPPA_DIAGNOSE=1 enables capture at startup."""
+    import sloppa.diagnostics as dmod
+    monkeypatch.setenv("SLOPPA_DIAGNOSE", "1")
     dmod.apply_env_enablement()
     assert dmod._capture_enabled is True
 
-    monkeypatch.delenv("W2A_DIAGNOSE", raising=False)
+    monkeypatch.delenv("SLOPPA_DIAGNOSE", raising=False)
     dmod.apply_env_enablement()
     assert dmod._capture_enabled is False
 ```
@@ -601,19 +601,19 @@ Expected: FAIL with `AttributeError: module ... has no attribute 'apply_env_enab
 
 - [ ] **Step 3: Implement env-gated enablement**
 
-Append to `src/chatgpt_web2api/diagnostics.py`:
+Append to `src/sloppa/diagnostics.py`:
 
 ```python
 import os
 
 
 def apply_env_enablement() -> None:
-    """Enable capture when W2A_DIAGNOSE is truthy (called at server startup)."""
+    """Enable capture when SLOPPA_DIAGNOSE is truthy (called at server startup)."""
     global _capture_enabled
-    _capture_enabled = os.environ.get("W2A_DIAGNOSE", "").lower() in ("1", "true", "yes")
+    _capture_enabled = os.environ.get("SLOPPA_DIAGNOSE", "").lower() in ("1", "true", "yes")
 ```
 
-In `src/chatgpt_web2api/service.py`, inside `Service.start()` (before connecting the driver), add:
+In `src/sloppa/service.py`, inside `Service.start()` (before connecting the driver), add:
 
 ```python
 from .diagnostics import apply_env_enablement
@@ -628,8 +628,8 @@ Expected: PASS (13 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/chatgpt_web2api/diagnostics.py src/chatgpt_web2api/service.py tests/test_diagnostics.py
-git commit -m "feat(diagnostics): enable capture at startup via W2A_DIAGNOSE=1"
+git add src/sloppa/diagnostics.py src/sloppa/service.py tests/test_diagnostics.py
+git commit -m "feat(diagnostics): enable capture at startup via SLOPPA_DIAGNOSE=1"
 ```
 
 ---
@@ -637,8 +637,8 @@ git commit -m "feat(diagnostics): enable capture at startup via W2A_DIAGNOSE=1"
 ## Task 5: The `doctor` subcommand — print evidence
 
 **Files:**
-- Create: `src/chatgpt_web2api/doctor.py`
-- Modify: `src/chatgpt_web2api/__main__.py`
+- Create: `src/sloppa/doctor.py`
+- Modify: `src/sloppa/__main__.py`
 - Test: `tests/test_doctor.py`
 
 - [ ] **Step 1: Write the failing test for evidence printing**
@@ -652,7 +652,7 @@ from pathlib import Path
 
 import pytest
 
-from chatgpt_web2api.doctor import print_evidence, list_functions_with_artifacts
+from sloppa.doctor import print_evidence, list_functions_with_artifacts
 
 
 def test_print_evidence_outputs_the_artifact(capsys, tmp_path):
@@ -690,7 +690,7 @@ Expected: FAIL with `ImportError: cannot import name 'print_evidence'`
 
 - [ ] **Step 3: Write the doctor module**
 
-Create `src/chatgpt_web2api/doctor.py`:
+Create `src/sloppa/doctor.py`:
 
 ```python
 """The `doctor` subcommand: print diagnostic evidence + re-verify fixes.
@@ -741,7 +741,7 @@ def run_doctor(args) -> None:
     if getattr(args, "list", False):
         fns = list_functions_with_artifacts(base)
         if not fns:
-            print("No diagnostic artifacts found. Set W2A_DIAGNOSE=1 and trigger "
+            print("No diagnostic artifacts found. Set SLOPPA_DIAGNOSE=1 and trigger "
                   "a breakage to capture one.")
             return
         print("Functions with captured artifacts:")
@@ -756,20 +756,20 @@ def run_doctor(args) -> None:
 
     function = getattr(args, "function", None)
     if not function:
-        print("Usage: chatgpt-web2api doctor <function> | --list | --verify <function>")
+        print("Usage: sloppa doctor <function> | --list | --verify <function>")
         return
 
     latest = _DIAG_DIR.latest(function)
     if latest is None:
         print(f"No artifact for '{function}'. Capture one by enabling "
-              "W2A_DIAGNOSE=1 and triggering the breakage.")
+              "SLOPPA_DIAGNOSE=1 and triggering the breakage.")
         return
     print_evidence(latest)
 ```
 
 - [ ] **Step 4: Register the subcommand in `__main__.py`**
 
-In `src/chatgpt_web2api/__main__.py`, change the subcommands set and add the parser (around line 128-142):
+In `src/sloppa/__main__.py`, change the subcommands set and add the parser (around line 128-142):
 
 ```python
     subcommands = {"start", "inject-cookies", "doctor"}
@@ -796,7 +796,7 @@ Expected: PASS (2 tests). Also run `pytest -q` to confirm the new subcommand wir
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/chatgpt_web2api/doctor.py src/chatgpt_web2api/__main__.py tests/test_doctor.py
+git add src/sloppa/doctor.py src/sloppa/__main__.py tests/test_doctor.py
 git commit -m "feat(doctor): add doctor subcommand to print diagnostic evidence"
 ```
 
@@ -805,7 +805,7 @@ git commit -m "feat(doctor): add doctor subcommand to print diagnostic evidence"
 ## Task 6: `doctor --verify` — re-run a function live to confirm a fix
 
 **Files:**
-- Create: `src/chatgpt_web2api/doctor_verify.py`
+- Create: `src/sloppa/doctor_verify.py`
 - Test: `tests/test_doctor.py` (append)
 
 - [ ] **Step 1: Write the failing test for verify**
@@ -816,7 +816,7 @@ Append to `tests/test_doctor.py`:
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from chatgpt_web2api import doctor_verify
+from sloppa import doctor_verify
 
 
 def test_verify_runs_function_and_reports_pass(monkeypatch, capsys):
@@ -848,7 +848,7 @@ Expected: FAIL with `ImportError: cannot import name 'doctor_verify'`
 
 - [ ] **Step 3: Write the verify module**
 
-Create `src/chatgpt_web2api/doctor_verify.py`:
+Create `src/sloppa/doctor_verify.py`:
 
 ```python
 """`doctor --verify <function>`: re-run a function live to confirm a fix.
@@ -923,7 +923,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/chatgpt_web2api/doctor_verify.py tests/test_doctor.py
+git add src/sloppa/doctor_verify.py tests/test_doctor.py
 git commit -m "feat(doctor): add --verify to re-run a function live"
 ```
 
@@ -942,17 +942,17 @@ Create `tests/test_e2e_doctor.py`:
 """E2E: a real broken path triggers capture, and doctor reads the artifact.
 
 Uses create_project (known-broken against the live API) as the trigger: with
-W2A_DIAGNOSE=1, calling it captures an artifact; doctor then prints the evidence.
+SLOPPA_DIAGNOSE=1, calling it captures an artifact; doctor then prints the evidence.
 
-Run with: W2A_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v
+Run with: SLOPPA_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v
 """
 import json
 import os
 
 import pytest
 
-import chatgpt_web2api.diagnostics as dmod
-from chatgpt_web2api.cdp_driver import CDPDriver
+import sloppa.diagnostics as dmod
+from sloppa.cdp_driver import CDPDriver
 
 pytestmark = pytest.mark.e2e
 
@@ -964,7 +964,7 @@ async def test_broken_function_triggers_capture(e2e_driver: CDPDriver, tmp_path,
     monkeypatch.setattr(dmod, "_capture_enabled", True)
 
     # create_project is known-broken (422); calling it should capture an artifact
-    result = await e2e_driver.create_project(name="W2A-DOCTOR-PROBE", instructions="")
+    result = await e2e_driver.create_project(name="SLOPPA-DOCTOR-PROBE", instructions="")
     assert isinstance(result, dict) and "error" in result  # confirms it's broken
 
     files = list(tmp_path.glob("create_project-*.json"))
@@ -980,9 +980,9 @@ async def test_doctor_prints_evidence_for_broken_function(e2e_driver, tmp_path, 
     """After capture, doctor prints the evidence a fix-agent would read."""
     monkeypatch.setattr(dmod, "_DIAG_DIR", dmod.DiagnosticsDir(base=tmp_path))
     monkeypatch.setattr(dmod, "_capture_enabled", True)
-    await e2e_driver.create_project(name="W2A-DOCTOR-PROBE2", instructions="")
+    await e2e_driver.create_project(name="SLOPPA-DOCTOR-PROBE2", instructions="")
 
-    from chatgpt_web2api.doctor import print_evidence
+    from sloppa.doctor import print_evidence
     art = sorted(tmp_path.glob("create_project-*.json"))[-1]
     print_evidence(art)
     out = capsys.readouterr().out
@@ -997,7 +997,7 @@ Expected: "no tests ran" (deselected; e2e marker excluded by default).
 
 - [ ] **Step 3: Run it live (opt-in, paced)**
 
-Run: `W2A_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v`
+Run: `SLOPPA_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v`
 Expected: PASS (2 tests). This proves the end-to-end reactive loop: real breakage → captured artifact → doctor prints it.
 
 - [ ] **Step 4: Commit**
@@ -1025,26 +1025,26 @@ Add after the "Rate Limits & Agent Retry" section:
 ### 🩺 Troubleshooting API/UI Drift
 
 ChatGPT changes its web API over time, which can silently break driver functions
-(the unit-test mocks can't detect this). ChatGPT-Web2API ships a **reactive
+(the unit-test mocks can't detect this). Sloppa ships a **reactive
 diagnostic** that captures evidence at the moment a function breaks, plus a
 `doctor` command that prints it for fast repair.
 
 **Enable capture** (off by default) so breakage in the wild is recorded:
 
 ```bash
-W2A_DIAGNOSE=1 chatgpt-web2api start
+SLOPPA_DIAGNOSE=1 sloppa start
 ```
 
 When a function breaks, an artifact is written to
-`~/.chatgpt-web2api/diagnostics/<function>-<timestamp>.json` with the exact
+`~/.sloppa/diagnostics/<function>-<timestamp>.json` with the exact
 request, live response, expected-vs-actual mismatch (redacted of secrets).
 
 **Diagnose + verify a fix:**
 
 ```bash
-chatgpt-web2api doctor --list                  # which functions have artifacts?
-chatgpt-web2api doctor create_project          # print the captured evidence
-chatgpt-web2api doctor --verify get_models     # re-run a function live to test a fix
+sloppa doctor --list                  # which functions have artifacts?
+sloppa doctor create_project          # print the captured evidence
+sloppa doctor --verify get_models     # re-run a function live to test a fix
 ```
 
 `doctor` prints the evidence an AI coding agent (or you) reads to propose the
@@ -1053,18 +1053,18 @@ account before you commit it. No AI is bundled — the project captures
 deterministic evidence; the fix is human-applied.
 ```
 
-- [ ] **Step 2: Add `W2A_DIAGNOSE` to `.env.example`**
+- [ ] **Step 2: Add `SLOPPA_DIAGNOSE` to `.env.example`**
 
 ```bash
 # Reactive diagnostics: capture evidence when a driver function breaks (off by default).
-# Artifacts go to ~/.chatgpt-web2api/diagnostics/. See README "Troubleshooting Drift".
-# W2A_DIAGNOSE=1
+# Artifacts go to ~/.sloppa/diagnostics/. See README "Troubleshooting Drift".
+# SLOPPA_DIAGNOSE=1
 ```
 
 - [ ] **Step 3: Add to CHANGELOG `[Unreleased]` → Added**
 
 ```markdown
-- **Reactive drift diagnostics + `doctor` command.** When ChatGPT changes its API/UI and a driver function returns a broken shape, a `@diagnose` decorator captures a redacted artifact (request, live response, expected-vs-actual mismatch) under `~/.chatgpt-web2api/diagnostics/`. The new `chatgpt-web2api doctor <function>` command prints the evidence for fast repair, and `doctor --verify <function>` re-runs a function live to confirm a fix. Enabled via `W2A_DIAGNOSE=1` (off by default). Replaces the throwaway probe scripts used during this session's debugging.
+- **Reactive drift diagnostics + `doctor` command.** When ChatGPT changes its API/UI and a driver function returns a broken shape, a `@diagnose` decorator captures a redacted artifact (request, live response, expected-vs-actual mismatch) under `~/.sloppa/diagnostics/`. The new `sloppa doctor <function>` command prints the evidence for fast repair, and `doctor --verify <function>` re-runs a function live to confirm a fix. Enabled via `SLOPPA_DIAGNOSE=1` (off by default). Replaces the throwaway probe scripts used during this session's debugging.
 ```
 
 - [ ] **Step 4: Commit**

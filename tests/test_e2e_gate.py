@@ -2,7 +2,7 @@
 
 These are NOT e2e tests — they verify the gating mechanism:
   - an ``e2e``-marked item is deselected (not failed) by default,
-  - it runs only when ``W2A_E2E_RUN=1``.
+  - it runs only when ``SLOPPA_E2E_RUN=1``.
 
 The mechanism lives in ``tests/conftest.py``.
 """
@@ -14,21 +14,21 @@ import tests.conftest as conftest
 
 
 def test_e2e_enabled_flag_reads_env(monkeypatch):
-    """``e2e_enabled()`` is True iff W2A_E2E_RUN == '1'."""
-    monkeypatch.delenv("W2A_E2E_RUN", raising=False)
+    """``e2e_enabled()`` is True iff SLOPPA_E2E_RUN == '1'."""
+    monkeypatch.delenv("SLOPPA_E2E_RUN", raising=False)
     assert conftest.e2e_enabled() is False
 
-    monkeypatch.setenv("W2A_E2E_RUN", "1")
+    monkeypatch.setenv("SLOPPA_E2E_RUN", "1")
     assert conftest.e2e_enabled() is True
 
-    monkeypatch.setenv("W2A_E2E_RUN", "0")
+    monkeypatch.setenv("SLOPPA_E2E_RUN", "0")
     assert conftest.e2e_enabled() is False
 
 
 def test_deselect_items_helper_filters_when_disabled(monkeypatch):
     """When disabled, e2e-marked items are dropped from the session; others stay."""
     pytestmark = pytest.mark.usefixtures  # noqa  (placeholder, not used)
-    monkeypatch.delenv("W2A_E2E_RUN", raising=False)
+    monkeypatch.delenv("SLOPPA_E2E_RUN", raising=False)
 
     # Build two fake items: one e2e-marked, one plain.
     class FakeMarker:
@@ -57,8 +57,8 @@ def test_deselect_items_helper_filters_when_disabled(monkeypatch):
 
 
 def test_deselect_keeps_e2e_items_when_enabled(monkeypatch):
-    """When W2A_E2E_RUN=1, e2e-marked items stay in the session."""
-    monkeypatch.setenv("W2A_E2E_RUN", "1")
+    """When SLOPPA_E2E_RUN=1, e2e-marked items stay in the session."""
+    monkeypatch.setenv("SLOPPA_E2E_RUN", "1")
 
     class FakeMarker:
         def __init__(self, name):

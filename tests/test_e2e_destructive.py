@@ -7,16 +7,16 @@ delete an id that did NOT exist before the test.
 These are the whole point of "full" E2E: they prove the real DELETE paths
 work against the live account, which mocks cannot verify.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_destructive.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_destructive.py -m e2e -v
 """
 
 import uuid
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.mcp_server import (
+from sloppa.cdp_driver import CDPDriver
+from sloppa.config import Config
+from sloppa.mcp_server import (
     do_chat_completion,
     do_create_memory,
     do_create_project,
@@ -75,7 +75,7 @@ async def test_delete_memory_own_creation(e2e_driver: CDPDriver):
     """
     before = {m["id"] for m in (await do_list_memories(e2e_driver))["memories"]}
 
-    marker = f"W2A-E2E-DELMEM-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-DELMEM-{uuid.uuid4().hex[:6]}"
     await do_create_memory(e2e_driver, {"content": marker})
 
     after = {m["id"] for m in (await do_list_memories(e2e_driver))["memories"]}
@@ -109,7 +109,7 @@ async def test_create_then_delete_project(
     The project is registered in e2e_created as a safety net: even if the
     delete assertion failed, the session cleanup finalizer would remove it.
     """
-    marker = f"W2A-E2E-PROJ-{uuid.uuid4().hex[:6]}"
+    marker = f"SLOPPA-E2E-PROJ-{uuid.uuid4().hex[:6]}"
     created = await do_create_project(
         e2e_driver, {"name": marker, "instructions": "", "memory_scope": "global"}
     )

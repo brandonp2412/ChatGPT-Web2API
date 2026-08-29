@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.backend_client import TOKEN_TTL_SECONDS, BackendClient
+from sloppa.backend_client import TOKEN_TTL_SECONDS, BackendClient
 
 
 def _make_client():
@@ -151,8 +151,8 @@ def test_backend_client_holds_no_token_state():
 def test_check_auth_in_raw_trips_driver_breaker(monkeypatch):
     """On a login-page body, _check_auth_in_raw trips AUTH_EXPIRED on the
     DRIVER's breaker registry and raises AuthExpiredError."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
-    from chatgpt_web2api.cdp_driver import AuthExpiredError
+    from sloppa.breakers import BreakerKind, BreakerRegistry
+    from sloppa.cdp_driver import AuthExpiredError
 
     client, driver = _make_client()
     driver._breakers = BreakerRegistry()
@@ -173,8 +173,8 @@ def test_check_auth_in_raw_noop_on_normal_body():
 
 def test_driver_wires_backend_client():
     """CDPDriver.__init__ constructs a BackendClient and delegates through it."""
-    from chatgpt_web2api.backend_client import BackendClient
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.backend_client import BackendClient
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     assert isinstance(d._backend_client, BackendClient)
@@ -183,7 +183,7 @@ def test_driver_wires_backend_client():
 
 def test_driver_keeps_token_ttl_seconds_reexport():
     """cdp_driver re-exports TOKEN_TTL_SECONDS from backend_client."""
-    from chatgpt_web2api import cdp_driver
+    from sloppa import cdp_driver
 
     assert cdp_driver.TOKEN_TTL_SECONDS == 3600
 
@@ -198,7 +198,7 @@ async def test_create_memory_uses_driver_get_memories_for_verification():
     interceptable by driver monkeypatches), NOT via self.get_memories (the
     client-internal method). Pre-extraction this resolved through the driver
     method; the extraction must not bypass it."""
-    from chatgpt_web2api.cdp_driver import StreamChunk
+    from sloppa.cdp_driver import StreamChunk
 
     client, driver = _make_client()
 
@@ -223,7 +223,7 @@ async def test_create_memory_uses_driver_get_memories_for_verification():
 async def test_create_memory_success_false_when_get_memories_no_match():
     """When driver.get_memories returns no matching memory, success is False.
     Guards the verification path stays wired through the driver seam."""
-    from chatgpt_web2api.cdp_driver import StreamChunk
+    from sloppa.cdp_driver import StreamChunk
 
     client, driver = _make_client()
     driver.navigate_new_chat = AsyncMock()

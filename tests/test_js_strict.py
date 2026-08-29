@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, CDPJSError
+from sloppa.cdp_driver import CDPDriver, CDPJSError
 
 
 def _driver_with_cdp_response(resp: dict):

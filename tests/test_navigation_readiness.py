@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, NavigationReadinessProbe
+from sloppa.cdp_driver import CDPDriver, NavigationReadinessProbe
 
 
 def _probe_payload(*, url="https://chatgpt.com/c/conv-123",

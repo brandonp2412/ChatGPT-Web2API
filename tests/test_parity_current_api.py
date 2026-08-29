@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.parity_current_api import CurrentParityAPIServer
+from sloppa.parity_current_api import CurrentParityAPIServer
 
 
 @asynccontextmanager

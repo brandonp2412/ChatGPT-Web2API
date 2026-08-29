@@ -86,7 +86,8 @@ async def measure_skews_on_conv(conv_id: str, n: int = 8) -> list:
     async with websockets.connect(ws_url, max_size=None, ping_interval=20, ping_timeout=60) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         await ws.send(json.dumps({"id": nid(), "method": "Network.enable",
                                   "params": {"maxPostDataSize": 4 * 1024 * 1024}}))
@@ -117,7 +118,7 @@ async def measure_skews_on_conv(conv_id: str, n: int = 8) -> list:
             while True:
                 try:
                     _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             t_pre_wall = time.time()
@@ -128,7 +129,7 @@ async def measure_skews_on_conv(conv_id: str, n: int = 8) -> list:
             while time.time() < deadline:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if send_task.done() and time.time() > t_pre_wall + 8:
                         break
                     continue
@@ -213,7 +214,7 @@ async def main():
     b1 = await measure_skews_on_conv(conv_id, n=8)
 
     skews = [r["skew"] for r in b1 if r["skew"] is not None]
-    print(f"\n=== Batch results ===")
+    print("\n=== Batch results ===")
     if skews:
         print(f"n={len(skews)}  min={min(skews):.3f}  max={max(skews):.3f}  "
               f"mean={statistics.mean(skews):.3f}  std={statistics.stdev(skews) if len(skews)>1 else 0:.3f}")

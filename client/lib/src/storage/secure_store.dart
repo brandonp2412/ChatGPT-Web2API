@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../api/bridge_client.dart';
+import '../logging/app_logger.dart';
+import '../config.dart';
 
 typedef SupportDirectoryProvider = Future<Directory> Function();
 
@@ -17,7 +20,7 @@ abstract interface class SecureKeyValueStore {
 
 class FlutterSecureKeyValueStore implements SecureKeyValueStore {
   FlutterSecureKeyValueStore([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 
@@ -36,9 +39,9 @@ class SecureStore {
   SecureStore({
     SecureKeyValueStore? secureStorage,
     SupportDirectoryProvider? supportDirectoryProvider,
-  })  : _secure = secureStorage ?? FlutterSecureKeyValueStore(),
-        _supportDirectoryProvider =
-            supportDirectoryProvider ?? getApplicationSupportDirectory;
+  }) : _secure = secureStorage ?? FlutterSecureKeyValueStore(),
+       _supportDirectoryProvider =
+           supportDirectoryProvider ?? getApplicationSupportDirectory;
 
   static const String _baseUrlKey = 'bridge.base_url';
   static const String _apiKeyKey = 'bridge.api_key';
@@ -50,15 +53,48 @@ class SecureStore {
   final Cipher _cipher = AesGcm.with256bits();
   Future<void> _writeTail = Future<void>.value();
 
+  bool get _linuxKeychainUnavailable =>
+      !kIsWeb && Platform.isLinux && _secure is FlutterSecureKeyValueStore;
+
+  bool get _fileCacheUnavailable => kIsWeb || _linuxKeychainUnavailable;
+
   Future<BridgeSettings> loadSettings() async {
-    final baseUrl = await _secure.read(key: _baseUrlKey);
-    final apiKey = await _secure.read(key: _apiKeyKey);
+    if (kIsWeb) {
+      appLogger.debug(
+        'SecureStore: web secure storage is unavailable during startup; using defaults',
+      );
+      return const BridgeSettings(baseUrl: defaultBridgeUrl);
+    }
+    if (_linuxKeychainUnavailable) {
+      appLogger.warning(
+        'SecureStore: Linux keychain unavailable in this session; using default bridge settings',
+      );
+      return const BridgeSettings(baseUrl: defaultBridgeUrl);
+    }
+    appLogger.debug('SecureStore: reading bridge.base_url');
+    final baseUrl = await _readWithTimeout(_baseUrlKey);
+    appLogger.debug('SecureStore: reading bridge.api_key');
+    final apiKey = await _readWithTimeout(_apiKeyKey);
+    appLogger.debug('SecureStore: settings read complete');
     return BridgeSettings(
       baseUrl: baseUrl?.trim().isNotEmpty == true
           ? baseUrl!.trim()
-          : 'http://127.0.0.1:8080',
+          : defaultBridgeUrl,
       apiKey: apiKey ?? '',
     );
+  }
+
+  Future<String?> _readWithTimeout(String key) async {
+    try {
+      return await _secure.read(key: key).timeout(const Duration(seconds: 3));
+    } on Object catch (error, stackTrace) {
+      appLogger.handle(
+        error,
+        stackTrace,
+        'SecureStore: read failed/timed out for $key; using default',
+      );
+      return null;
+    }
   }
 
   Future<void> saveSettings(BridgeSettings settings) async {
@@ -78,9 +114,20 @@ class SecureStore {
   }
 
   Future<Map<String, dynamic>?> readCache() async {
+    if (_fileCacheUnavailable) {
+      appLogger.debug(
+        kIsWeb
+            ? 'SecureStore: file cache is unavailable on web; skipping restore'
+            : 'SecureStore: skipping encrypted cache on Linux without keychain',
+      );
+      return null;
+    }
+    appLogger.debug('SecureStore: waiting for cache writes');
     await _writeTail;
     final file = await _cacheFile();
+    appLogger.debug('SecureStore: checking cache ${file.path}');
     if (!await file.exists()) {
+      appLogger.debug('SecureStore: cache absent');
       return null;
     }
     try {
@@ -102,7 +149,12 @@ class SecureStore {
       );
       final decoded = jsonDecode(utf8.decode(clearBytes));
       return decoded is Map ? decoded.cast<String, dynamic>() : null;
-    } on Object {
+    } on Object catch (error, stackTrace) {
+      appLogger.handle(
+        error,
+        stackTrace,
+        'SecureStore: cache invalid; deleting',
+      );
       // A cache is disposable. Corruption, an invalidated device key, or an
       // interrupted write must never prevent the app from starting.
       await _deleteBestEffort(file);
@@ -111,6 +163,14 @@ class SecureStore {
   }
 
   Future<void> writeCache(Map<String, dynamic> data) {
+    if (_fileCacheUnavailable) {
+      appLogger.debug(
+        kIsWeb
+            ? 'SecureStore: file cache is unavailable on web; skipping write'
+            : 'SecureStore: skipping encrypted cache write on Linux without keychain',
+      );
+      return Future<void>.value();
+    }
     // Snapshot before queueing: callers may mutate their state while another
     // encrypted write is in flight.
     final encoded = jsonEncode(data);
@@ -152,7 +212,12 @@ class SecureStore {
       }
       await temp.rename(file.path);
       await _deleteBestEffort(backup);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      appLogger.error(
+        'SecureStore: atomic cache replacement failed; attempting rollback',
+        error,
+        stackTrace,
+      );
       if (!await file.exists() && movedOriginal && await backup.exists()) {
         try {
           await backup.rename(file.path);
@@ -170,6 +235,9 @@ class SecureStore {
   }
 
   Future<void> clearCache() async {
+    if (_fileCacheUnavailable) {
+      return;
+    }
     await _writeTail;
     final file = await _cacheFile();
     await _deleteBestEffort(file);
@@ -197,14 +265,13 @@ class SecureStore {
 
   Future<File> _cacheFile() async {
     final root = await _supportDirectoryProvider();
-    final directory =
-        Directory('${root.path}${Platform.pathSeparator}secure_cache');
+    final directory = Directory(
+      '${root.path}${Platform.pathSeparator}secure_cache',
+    );
     if (!await directory.exists()) {
       await directory.create(recursive: true);
     }
-    return File(
-      '${directory.path}${Platform.pathSeparator}$_cacheFileName',
-    );
+    return File('${directory.path}${Platform.pathSeparator}$_cacheFileName');
   }
 
   Future<void> _deleteBestEffort(File file) async {

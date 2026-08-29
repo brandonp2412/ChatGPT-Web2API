@@ -1,0 +1,165 @@
+2026-08-28 21:57:31,949 [INFO] sloppa.service: Ensuring Chrome is running...
+2026-08-28 21:57:31,958 [INFO] sloppa.chrome: Launching Chrome: /usr/bin/brave --remote-debugging-port=9222 --user-data-dir=/home/brandon/.config/BraveSoftware/Brave-Browser --no-first-run ...
+2026-08-28 21:57:31,959 [INFO] sloppa.chrome: Chrome PID: 2161328
+2026-08-28 21:57:32,765 [INFO] sloppa.chrome: CDP ready on port 9222
+2026-08-28 21:57:32,769 [INFO] sloppa.service: Connecting CDP driver...
+2026-08-28 21:57:32,876 [INFO] sloppa.cdp_driver: Created owned tab: 017F3F2FD8BEAE8C3179B42BD5C1747A
+2026-08-28 21:57:33,058 [INFO] sloppa.cdp_driver: Owned tab WS: ws://127.0.0.1:9222/devtools/page/017F3F2FD8BEAE8C3179B42BD5C1747A
+2026-08-28 21:57:33,058 [INFO] sloppa.cdp_driver: Connected via owned tab: 017F3F2FD8BEAE8C3179B42BD5C1747A
+2026-08-28 21:57:33,062 [INFO] sloppa.cdp_driver: CDP connected to Chrome
+2026-08-28 21:57:33,080 [INFO] sloppa.identity_listener: identity_listener_ready (send_seq=0)
+2026-08-28 21:57:34,738 [INFO] sloppa.service: Auth failed: No access token — not logged into ChatGPT — waiting for login
+2026-08-28 22:02:39,743 [INFO] sloppa.service: Shutting down...
+2026-08-28 22:02:39,758 [INFO] sloppa.cdp_driver: Closed owned tab: 017F3F2FD8BEAE8C3179B42BD5C1747A
+2026-08-28 22:02:39,758 [INFO] sloppa.cdp_driver: CDP driver closed
+2026-08-28 22:02:39,758 [INFO] sloppa.chrome: Stopping Chrome PID 2161328
+2026-08-28 22:02:39,790 [INFO] sloppa.service: Service stopped
+
+====================================================
+  NOT LOGGED IN
+====================================================
+
+  Chrome is open. Log into ChatGPT in the browser window.
+  Waiting for login...
+
+Traceback (most recent call last):
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 77, in start
+    await self._driver.connect()
+  File "/home/brandon/sloppa/src/sloppa/cdp_driver.py", line 604, in connect
+    await self._refresh_token()
+  File "/home/brandon/sloppa/src/sloppa/cdp_driver.py", line 1059, in _refresh_token
+    await self._backend_client._refresh_token()
+  File "/home/brandon/sloppa/src/sloppa/backend_client.py", line 141, in _refresh_token
+    raise (
+        last_error if last_error else RuntimeError("No access token — not logged into ChatGPT")
+    )
+RuntimeError: No access token — not logged into ChatGPT
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/brandon/sloppa/./.venv/bin/sloppa", line 6, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/brandon/sloppa/src/sloppa/__main__.py", line 200, in main
+    _run_start(args)
+    ~~~~~~~~~~^^^^^^
+  File "/home/brandon/sloppa/src/sloppa/__main__.py", line 277, in _run_start
+    asyncio.run(run_service(config))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 264, in run_service
+    await service.start()
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 84, in start
+    await self._wait_for_login()
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 134, in _wait_for_login
+    raise TimeoutError(f"Login not completed within {timeout}s")
+TimeoutError: Login not completed within 300s
+2026-08-28 22:46:34,032 [INFO] sloppa.service: Ensuring Chrome is running...
+2026-08-28 22:46:34,040 [INFO] sloppa.chrome: Launching Chrome: /usr/bin/chromium --remote-debugging-port=9222 --user-data-dir=/home/brandon/.sloppa/chrome-profile --no-first-run ...
+2026-08-28 22:46:34,041 [INFO] sloppa.chrome: Chrome PID: 2206798
+2026-08-28 22:46:34,748 [INFO] sloppa.chrome: CDP ready on port 9222
+2026-08-28 22:46:34,752 [INFO] sloppa.service: Connecting CDP driver...
+2026-08-28 22:46:34,998 [INFO] sloppa.cdp_driver: Created owned tab: 90903280346B89E84072B6E33F895D4F
+2026-08-28 22:46:35,005 [INFO] sloppa.cdp_driver: Owned tab WS: ws://127.0.0.1:9222/devtools/page/90903280346B89E84072B6E33F895D4F
+2026-08-28 22:46:35,005 [INFO] sloppa.cdp_driver: Connected via owned tab: 90903280346B89E84072B6E33F895D4F
+2026-08-28 22:46:35,012 [INFO] sloppa.cdp_driver: CDP connected to Chrome
+2026-08-28 22:46:35,113 [INFO] sloppa.identity_listener: identity_listener_ready (send_seq=0)
+2026-08-28 22:46:36,917 [INFO] sloppa.service: Auth failed: No access token — not logged into ChatGPT — waiting for login
+2026-08-28 22:47:56,117 [INFO] sloppa.service: Ensuring Chrome is running...
+2026-08-28 22:47:56,134 [INFO] sloppa.chrome: Launching Chrome: /usr/bin/brave --remote-debugging-port=9222 --user-data-dir=/home/brandon/.config/BraveSoftware/Brave-Browser --no-first-run ...
+2026-08-28 22:47:56,135 [INFO] sloppa.chrome: Chrome PID: 2208276
+2026-08-28 22:47:56,863 [INFO] sloppa.chrome: CDP ready on port 9222
+2026-08-28 22:47:56,867 [INFO] sloppa.service: Connecting CDP driver...
+2026-08-28 22:47:57,126 [INFO] sloppa.cdp_driver: Created owned tab: 2367E637BCC7F5BE2676288193A47A29
+2026-08-28 22:47:57,130 [INFO] sloppa.cdp_driver: Owned tab WS: ws://127.0.0.1:9222/devtools/page/2367E637BCC7F5BE2676288193A47A29
+2026-08-28 22:47:57,131 [INFO] sloppa.cdp_driver: Connected via owned tab: 2367E637BCC7F5BE2676288193A47A29
+2026-08-28 22:47:57,136 [INFO] sloppa.cdp_driver: CDP connected to Chrome
+2026-08-28 22:47:57,149 [INFO] sloppa.identity_listener: identity_listener_ready (send_seq=0)
+2026-08-28 22:47:58,859 [INFO] sloppa.service: Auth failed: No access token — not logged into ChatGPT — waiting for login
+2026-08-28 22:52:59,543 [INFO] sloppa.service: Shutting down...
+2026-08-28 22:52:59,556 [INFO] sloppa.cdp_driver: Closed owned tab: 2367E637BCC7F5BE2676288193A47A29
+2026-08-28 22:52:59,556 [INFO] sloppa.cdp_driver: CDP driver closed
+2026-08-28 22:52:59,556 [INFO] sloppa.chrome: Stopping Chrome PID 2208276
+2026-08-28 22:52:59,588 [INFO] sloppa.service: Service stopped
+
+====================================================
+  NOT LOGGED IN
+====================================================
+
+  Chrome is open. Log into ChatGPT in the browser window.
+  Waiting for login...
+
+Traceback (most recent call last):
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 77, in start
+    await self._driver.connect()
+  File "/home/brandon/sloppa/src/sloppa/cdp_driver.py", line 604, in connect
+    await self._refresh_token()
+  File "/home/brandon/sloppa/src/sloppa/cdp_driver.py", line 1059, in _refresh_token
+    await self._backend_client._refresh_token()
+  File "/home/brandon/sloppa/src/sloppa/backend_client.py", line 141, in _refresh_token
+    raise (
+        last_error if last_error else RuntimeError("No access token — not logged into ChatGPT")
+    )
+RuntimeError: No access token — not logged into ChatGPT
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/brandon/sloppa/.venv/bin/sloppa", line 6, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/brandon/sloppa/src/sloppa/__main__.py", line 200, in main
+    _run_start(args)
+    ~~~~~~~~~~^^^^^^
+  File "/home/brandon/sloppa/src/sloppa/__main__.py", line 277, in _run_start
+    asyncio.run(run_service(config))
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/asyncio/runners.py", line 205, in run
+    return runner.run(main)
+           ~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/runners.py", line 128, in run
+    return self._loop.run_until_complete(task)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "/usr/lib/python3.14/asyncio/base_events.py", line 720, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 264, in run_service
+    await service.start()
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 84, in start
+    await self._wait_for_login()
+  File "/home/brandon/sloppa/src/sloppa/service.py", line 134, in _wait_for_login
+    raise TimeoutError(f"Login not completed within {timeout}s")
+TimeoutError: Login not completed within 300s
+Traceback (most recent call last):
+  File "/home/brandon/sloppa/.venv/bin/sloppa", line 3, in <module>
+    from chatgpt_web2api.__main__ import main
+ModuleNotFoundError: No module named 'chatgpt_web2api'
+2026-08-29 11:37:53,716 [INFO] sloppa.service: Ensuring Chrome is running...
+2026-08-29 11:37:53,722 [INFO] sloppa.chrome: Found existing Chrome on CDP port 9222
+2026-08-29 11:37:53,722 [INFO] sloppa.service: Connecting CDP driver...
+2026-08-29 11:37:53,739 [INFO] sloppa.cdp_driver: Created owned tab: 847A8A7EE578C2AF90928BCBEBE73EEA
+2026-08-29 11:37:53,747 [INFO] sloppa.cdp_driver: Owned tab WS: ws://127.0.0.1:9222/devtools/page/847A8A7EE578C2AF90928BCBEBE73EEA
+2026-08-29 11:37:53,747 [INFO] sloppa.cdp_driver: Connected via owned tab: 847A8A7EE578C2AF90928BCBEBE73EEA
+2026-08-29 11:37:53,750 [INFO] sloppa.cdp_driver: CDP connected to Chrome
+2026-08-29 11:37:53,755 [INFO] sloppa.identity_listener: identity_listener_ready (send_seq=0)
+2026-08-29 11:37:54,495 [INFO] sloppa.backend_client: Auth: 1938 chars, user: Brandon Presley (attempt 1)
+2026-08-29 11:37:55,013 [WARNING] sloppa.service: API bound to loopback (127.0.0.1) with no api_keys — local no-auth mode. Safe for single-user local use; do NOT bind remotely without setting api_keys.
+2026-08-29 11:37:55,607 [INFO] sloppa.api_server: request_complete id=457e2b621c1b method=GET path=/health status=200 elapsed_ms=1
+2026-08-29 11:38:05,912 [INFO] sloppa.service: Ensuring Chrome is running...
+2026-08-29 11:38:05,915 [INFO] sloppa.chrome: Found existing Chrome on CDP port 9222
+2026-08-29 11:38:05,915 [INFO] sloppa.service: Connecting CDP driver...
+2026-08-29 11:38:05,918 [INFO] sloppa.cdp_driver: Reclaimed owned tab from registry: 847A8A7EE578C2AF90928BCBEBE73EEA (instance 8e46bb17d6b1)
+2026-08-29 11:38:05,924 [INFO] sloppa.cdp_driver: CDP connected to Chrome
+2026-08-29 11:38:05,925 [INFO] sloppa.identity_listener: identity_listener_ready (send_seq=0)
+2026-08-29 11:38:06,014 [INFO] sloppa.backend_client: Auth: 1938 chars, user: Brandon Presley (attempt 1)
+2026-08-29 11:38:06,026 [WARNING] sloppa.service: API bound to loopback (127.0.0.1) with no api_keys — local no-auth mode. Safe for single-user local use; do NOT bind remotely without setting api_keys.
+2026-08-29 11:38:06,799 [INFO] sloppa.api_server: request_complete id=997029e373d8 method=GET path=/health status=200 elapsed_ms=0

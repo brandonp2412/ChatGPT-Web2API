@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.mcp_driver_pool import McpSessionDriverPool
+from sloppa.config import Config
+from sloppa.mcp_driver_pool import McpSessionDriverPool
 
 
 def _make_pool(max_size=2, ttl=0.01, sweep_interval=0.1):

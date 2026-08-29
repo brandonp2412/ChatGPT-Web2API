@@ -23,11 +23,11 @@ class ConversationSummary {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'update_time': updateTime?.toIso8601String(),
-        'project_id': projectId,
-      };
+    'id': id,
+    'title': title,
+    'update_time': updateTime?.toIso8601String(),
+    'project_id': projectId,
+  };
 }
 
 class ChatCitation {
@@ -38,16 +38,16 @@ class ChatCitation {
   final String? text;
 
   factory ChatCitation.fromJson(Map<String, dynamic> json) => ChatCitation(
-        url: _string(json['url']),
-        title: _string(json['title']),
-        text: _string(json['text'] ?? json['snippet']),
-      );
+    url: _string(json['url']),
+    title: _string(json['title']),
+    text: _string(json['text'] ?? json['snippet']),
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'url': url,
-        'title': title,
-        'text': text,
-      };
+    'url': url,
+    'title': title,
+    'text': text,
+  };
 }
 
 class ChatAsset {
@@ -66,23 +66,24 @@ class ChatAsset {
   final String? type;
 
   bool get isImage =>
-      type == 'image' || (mimeType?.toLowerCase().startsWith('image/') ?? false);
+      type == 'image' ||
+      (mimeType?.toLowerCase().startsWith('image/') ?? false);
 
   factory ChatAsset.fromJson(Map<String, dynamic> json) => ChatAsset(
-        pointer: _string(json['asset_pointer'] ?? json['pointer']),
-        fileName: _string(json['file_name'] ?? json['name']),
-        mimeType: _string(json['mime_type']),
-        url: _string(json['url'] ?? json['download_url']),
-        type: _string(json['type']),
-      );
+    pointer: _string(json['asset_pointer'] ?? json['pointer']),
+    fileName: _string(json['file_name'] ?? json['name']),
+    mimeType: _string(json['mime_type']),
+    url: _string(json['url'] ?? json['download_url']),
+    type: _string(json['type']),
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'asset_pointer': pointer,
-        'file_name': fileName,
-        'mime_type': mimeType,
-        'url': url,
-        'type': type,
-      };
+    'asset_pointer': pointer,
+    'file_name': fileName,
+    'mime_type': mimeType,
+    'url': url,
+    'type': type,
+  };
 }
 
 class ChatMessage {
@@ -132,16 +133,16 @@ class ChatMessage {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'role': role,
-        'text': text,
-        'node_id': nodeId,
-        'status': status,
-        'end_turn': endTurn,
-        'citations': citations.map((ChatCitation item) => item.toJson()).toList(),
-        'assets': assets.map((ChatAsset item) => item.toJson()).toList(),
-        'blocks': blocks,
-      };
+    'id': id,
+    'role': role,
+    'text': text,
+    'node_id': nodeId,
+    'status': status,
+    'end_turn': endTurn,
+    'citations': citations.map((ChatCitation item) => item.toJson()).toList(),
+    'assets': assets.map((ChatAsset item) => item.toJson()).toList(),
+    'blocks': blocks,
+  };
 }
 
 class ConversationNode {
@@ -167,7 +168,9 @@ class ConversationNode {
       id: id,
       parent: _string(json['parent']),
       children: rawChildren is List
-          ? rawChildren.map((dynamic value) => value.toString()).toList(growable: false)
+          ? rawChildren
+                .map((dynamic value) => value.toString())
+                .toList(growable: false)
           : const <String>[],
       message: parsedMessage == null
           ? null
@@ -186,10 +189,10 @@ class ConversationNode {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'parent': parent,
-        'children': children,
-        'message': message?.toJson(),
-      };
+    'parent': parent,
+    'children': children,
+    'message': message?.toJson(),
+  };
 }
 
 class ResearchReport {
@@ -218,12 +221,12 @@ class ResearchReport {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'text': text,
-        'status': status,
-        'citations': citations.map((ChatCitation item) => item.toJson()).toList(),
-        'assets': assets.map((ChatAsset item) => item.toJson()).toList(),
-      };
+    'id': id,
+    'text': text,
+    'status': status,
+    'citations': citations.map((ChatCitation item) => item.toJson()).toList(),
+    'assets': assets.map((ChatAsset item) => item.toJson()).toList(),
+  };
 }
 
 class ChatConversation {
@@ -266,36 +269,45 @@ class ChatConversation {
       currentNode: _string(json['current_node']),
       messages: messageRaw is List
           ? messageRaw
-              .whereType<Map>()
-              .map((Map item) => ChatMessage.fromJson(item.cast<String, dynamic>()))
-              .where(
-                (ChatMessage item) =>
-                    item.text.isNotEmpty || item.assets.isNotEmpty || item.blocks.isNotEmpty,
-              )
-              .toList(growable: false)
+                .whereType<Map<Object?, Object?>>()
+                .map(
+                  (Map<Object?, Object?> item) =>
+                      ChatMessage.fromJson(item.cast<String, dynamic>()),
+                )
+                .where(
+                  (ChatMessage item) =>
+                      item.text.isNotEmpty ||
+                      item.assets.isNotEmpty ||
+                      item.blocks.isNotEmpty,
+                )
+                .toList(growable: false)
           : const <ChatMessage>[],
       nodes: nodes,
       researchReports: reportsRaw is List
           ? reportsRaw
-              .whereType<Map>()
-              .map((Map item) => ResearchReport.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false)
+                .whereType<Map<Object?, Object?>>()
+                .map(
+                  (Map<Object?, Object?> item) =>
+                      ResearchReport.fromJson(item.cast<String, dynamic>()),
+                )
+                .toList(growable: false)
           : const <ResearchReport>[],
     );
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'id': id,
-        'title': title,
-        'current_node': currentNode,
-        'messages': messages.map((ChatMessage item) => item.toJson()).toList(),
-        'nodes': nodes.map(
-          (String key, ConversationNode value) => MapEntry<String, dynamic>(key, value.toJson()),
-        ),
-        'research_reports': researchReports
-            .map((ResearchReport item) => item.toJson())
-            .toList(growable: false),
-      };
+    'id': id,
+    'title': title,
+    'current_node': currentNode,
+    'messages': messages.map((ChatMessage item) => item.toJson()).toList(),
+    'nodes': nodes.map(
+      (String key, ConversationNode value) =>
+          MapEntry<String, dynamic>(key, value.toJson()),
+    ),
+    'research_reports': researchReports
+        .map((ResearchReport item) => item.toJson())
+        .toList(growable: false),
+  };
 
   BranchPosition? branchPositionFor(ChatMessage message) {
     String? nodeId = message.nodeId;
@@ -385,27 +397,33 @@ class BridgeEvent {
 List<Map<String, dynamic>> _parseBlocks(dynamic value) {
   return value is List
       ? value
-          .whereType<Map>()
-          .map((Map item) => item.cast<String, dynamic>())
-          .toList(growable: false)
+            .whereType<Map<Object?, Object?>>()
+            .map((Map<Object?, Object?> item) => item.cast<String, dynamic>())
+            .toList(growable: false)
       : const <Map<String, dynamic>>[];
 }
 
 List<ChatCitation> _parseCitations(dynamic value) {
   return value is List
       ? value
-          .whereType<Map>()
-          .map((Map item) => ChatCitation.fromJson(item.cast<String, dynamic>()))
-          .toList(growable: false)
+            .whereType<Map<Object?, Object?>>()
+            .map(
+              (Map<Object?, Object?> item) =>
+                  ChatCitation.fromJson(item.cast<String, dynamic>()),
+            )
+            .toList(growable: false)
       : const <ChatCitation>[];
 }
 
 List<ChatAsset> _parseAssets(dynamic value) {
   return value is List
       ? value
-          .whereType<Map>()
-          .map((Map item) => ChatAsset.fromJson(item.cast<String, dynamic>()))
-          .toList(growable: false)
+            .whereType<Map<Object?, Object?>>()
+            .map(
+              (Map<Object?, Object?> item) =>
+                  ChatAsset.fromJson(item.cast<String, dynamic>()),
+            )
+            .toList(growable: false)
       : const <ChatAsset>[];
 }
 
@@ -430,7 +448,7 @@ List<ChatAsset> _assetsFromBlocks(List<Map<String, dynamic>> blocks) {
     }
     final nested = block['assets'];
     if (nested is List) {
-      for (final item in nested.whereType<Map>()) {
+      for (final item in nested.whereType<Map<Object?, Object?>>()) {
         result.add(ChatAsset.fromJson(item.cast<String, dynamic>()));
       }
     }
@@ -442,7 +460,8 @@ List<ChatCitation> _dedupeCitations(List<ChatCitation> items) {
   final seen = <String>{};
   final result = <ChatCitation>[];
   for (final item in items) {
-    final key = '${item.url ?? ''}\u0000${item.title ?? ''}\u0000${item.text ?? ''}';
+    final key =
+        '${item.url ?? ''}\u0000${item.title ?? ''}\u0000${item.text ?? ''}';
     if (seen.add(key)) {
       result.add(item);
     }
@@ -472,7 +491,10 @@ String? _string(dynamic value) {
 
 DateTime? _date(dynamic value) {
   if (value is num) {
-    return DateTime.fromMillisecondsSinceEpoch((value * 1000).round(), isUtc: true).toLocal();
+    return DateTime.fromMillisecondsSinceEpoch(
+      (value * 1000).round(),
+      isUtc: true,
+    ).toLocal();
   }
   final text = _string(value);
   return text == null ? null : DateTime.tryParse(text)?.toLocal();
@@ -493,15 +515,17 @@ String _contentText(dynamic value) {
     }
   }
   if (value is List) {
-    return value.map((dynamic item) {
-      if (item is String) {
-        return item;
-      }
-      if (item is Map) {
-        return _string(item['text']) ?? jsonEncode(item);
-      }
-      return item.toString();
-    }).join('\n');
+    return value
+        .map((dynamic item) {
+          if (item is String) {
+            return item;
+          }
+          if (item is Map) {
+            return _string(item['text']) ?? jsonEncode(item);
+          }
+          return item.toString();
+        })
+        .join('\n');
   }
   return '';
 }

@@ -1,6 +1,6 @@
 # Production Runbook
 
-> **Scope:** operating a running `chatgpt-web2api` deployment — interpreting
+> **Scope:** operating a running `sloppa` deployment — interpreting
 > health, diagnosing failure modes, understanding breaker states, recovering
 > auth, collecting logs, and restarting safely. For installation see
 > [deployment.md](deployment.md); for OS-supervisor wiring see
@@ -32,7 +32,7 @@ treated as down. See [§3 failure modes](#3-common-failure-modes).
 ### The reconcile command
 
 ```bash
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 ```
 
 `ensure` is **point-in-time**: it reconciles REST + MCP/SSE to a healthy state
@@ -44,7 +44,7 @@ and exits. It is not a daemon. Exit codes:
 | `1` | reconcile failure (REST or SSE could not be made ready) | inspect logs, re-run after fix |
 | `2` | **auth/login needed** (`auth_required` breaker open) | human login required (see [§6](#6-auth-recovery-flow)) |
 
-> ⚠️ `python -m chatgpt_web2api.ensure` does **not** work — the `ensure`
+> ⚠️ `python -m sloppa.ensure` does **not** work — the `ensure`
 > submodule has no `__main__` block. Use the console-script subcommand only.
 
 `ensure` launches REST and MCP/SSE as **detached child processes** (POSIX
@@ -239,8 +239,8 @@ all `Circuit open` lines.
 
 The system tracks exactly **four** breakers. All thresholds/cooldowns are
 **hardcoded** in `breakers.py` — there is **no env override** (do not look for
-`W2A_BREAKER_*`; it does not exist). The only breaker-adjacent env tunable is
-`W2A_ENSURE_BREAKER_COOLDOWN_GRACE_S` (default 5s), which is an `ensure`
+`SLOPPA_BREAKER_*`; it does not exist). The only breaker-adjacent env tunable is
+`SLOPPA_ENSURE_BREAKER_COOLDOWN_GRACE_S` (default 5s), which is an `ensure`
 supervisor grace budget, not a breaker cooldown.
 
 ### The four breakers
@@ -372,18 +372,18 @@ no MCP listener. Restart REST **first**, confirm REST/Chrome/CDP is ready,
 
 ```bash
 # 1. Restart REST (it owns Chrome, so this relaunches Chrome too).
-systemctl --user restart chatgpt-web2api.service
+systemctl --user restart sloppa.service
 
 # 2. Wait until REST/Chrome/CDP is actually ready. `ensure` reconciles and
 #    exits 0 only when REST is ready — or poll /health until
 #    chrome_running=true and driver_connected=true.
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 
 # 3. NOW restart MCP/SSE. It connects to the already-ready Chrome over CDP.
-systemctl --user restart chatgpt-web2api-mcp.service
+systemctl --user restart sloppa-mcp.service
 
 # 4. Re-run ensure (or an MCP tool call) to confirm the SSE listener came up.
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 ```
 
 Why the ordering matters: MCP/SSE attaches to REST-owned Chrome over CDP and
@@ -407,9 +407,9 @@ per [§8](#8-post-deploy--post-restart-validation).
 ### The safe restart
 ```bash
 # 1. Stop gracefully if you can (sends SIGTERM; REST drains).
-#    On systemd:  systemctl --user stop chatgpt-web2api.service
+#    On systemd:  systemctl --user stop sloppa.service
 # 2. Let ensure reconcile (it will cold-start REST + MCP if they're gone).
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 # 3. Verify — see §8.
 ```
 
@@ -431,7 +431,7 @@ split is structural (`_owns_chrome`), not lock-based — see
 monitor is the only one that restarts; an attacher's monitor no-ops on restart
 by design. No action required beyond restarting the attacher process itself
 (its owned tab is reclaimable on restart only if it uses a stable
-`W2A_INSTANCE_ID`; a stdio MCP process whose identity was PID-derived starts a
+`SLOPPA_INSTANCE_ID`; a stdio MCP process whose identity was PID-derived starts a
 fresh tab).
 
 **Owner process dies** → Chrome may be **orphaned**: it keeps running but no live
@@ -471,7 +471,7 @@ Run in order; stop at the first failure.
 
 ```bash
 # 1. ensure exited 0 (REST + SSE ready) — or re-run it:
-chatgpt-web2api ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
+sloppa ensure --rest-port 8080 --mcp-sse-port 8090 --cdp-port 9222
 # expect: exit 0, "REST + SSE ready"
 
 # 2. Health
@@ -527,15 +527,15 @@ this step only if your deployment does not use MCP/SSE.
 
 ## 9. Log collection
 
-`chatgpt-web2api` logs to **stderr** at the configured level. There is no
+`sloppa` logs to **stderr** at the configured level. There is no
 built-in log file or rotation — capture via the supervisor's stdout/stderr
 redirection (see [os-supervision.md](os-supervision.md) per-OS sections).
 
-Control verbosity with `W2A_LOG_LEVEL` (`DEBUG`/`INFO`/`WARNING`/`ERROR`;
+Control verbosity with `SLOPPA_LOG_LEVEL` (`DEBUG`/`INFO`/`WARNING`/`ERROR`;
 default `INFO`):
 
 ```bash
-W2A_LOG_LEVEL=DEBUG  # most verbose; use for incident diagnosis
+SLOPPA_LOG_LEVEL=DEBUG  # most verbose; use for incident diagnosis
 ```
 
 ### What to look for in logs during an incident
@@ -556,8 +556,8 @@ W2A_LOG_LEVEL=DEBUG  # most verbose; use for incident diagnosis
 All field names, state values, thresholds, and exit codes above are verified
 against:
 
-- `/health` schema & `status` conditions — `src/chatgpt_web2api/api_server.py:108-186`
-- Breaker kinds, policies, states — `src/chatgpt_web2api/breakers.py:46-109, 133-252`
+- `/health` schema & `status` conditions — `src/sloppa/api_server.py:108-186`
+- Breaker kinds, policies, states — `src/sloppa/breakers.py:46-109, 133-252`
 - Breaker trip/reset sites — `backend_client.py:187,210-211,344`; `chatgpt_dom.py:173,206,277,418,427`; `cdp_driver.py:592,599`; `chrome.py:40-68`
 - 503 `circuit_open` mapping — `api_server.py:377-397,467-480`; MCP `mcp_server.py:1519-1576`
 - `ensure` exit codes & flow — `ensure.py:14-19,725-790`

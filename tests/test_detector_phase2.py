@@ -23,11 +23,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.completion_detector import (
+from sloppa.completion_detector import (
     CompletionDetector,
     DetectorBudgets,
 )
-from chatgpt_web2api.turn_anchor import TurnAnchor, TurnEndResult
+from sloppa.turn_anchor import TurnAnchor, TurnEndResult
 
 
 def _make_detector(budgets=None, conv_id="conv-1"):
@@ -152,7 +152,7 @@ async def test_stream_idle_uses_shorter_budget_after_first_content(monkeypatch):
     """Once text has appeared and then stopped progressing, the stream-idle
     budget applies — which is shorter than first-content for reasoning models.
     Verify the stall_kind is 'stream_idle_timeout', not 'first_content_timeout'."""
-    from chatgpt_web2api.cdp_driver import GenerationStuckError
+    from sloppa.cdp_driver import GenerationStuckError
 
     budgets = DetectorBudgets(
         first_content_timeout_seconds=300,  # long
@@ -204,7 +204,7 @@ async def test_stream_idle_uses_shorter_budget_after_first_content(monkeypatch):
 async def test_hard_cap_wins_over_dom_liveness(monkeypatch):
     """Even if the DOM shows a thinking/generating indicator forever, the hard
     cap must eventually fire. No infinite waits."""
-    from chatgpt_web2api.cdp_driver import GenerationStuckError
+    from sloppa.cdp_driver import GenerationStuckError
 
     budgets = DetectorBudgets(
         first_content_timeout_seconds=300,
@@ -295,7 +295,7 @@ async def test_final_reconciliation_success_returns_normally(monkeypatch):
 async def test_structured_stall_error_has_diagnostic_fields(monkeypatch):
     """Phase-2 stall errors carry structured fields for observability:
     stall_kind, model_class, elapsed_seconds, generation_active_signal."""
-    from chatgpt_web2api.cdp_driver import GenerationStuckError
+    from sloppa.cdp_driver import GenerationStuckError
 
     budgets = DetectorBudgets(
         first_content_timeout_seconds=5,

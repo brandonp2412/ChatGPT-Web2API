@@ -45,9 +45,7 @@ class VoiceOverlay extends StatelessWidget {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) => VoiceDialog(
-        controller: controller,
-      ),
+      builder: (BuildContext context) => VoiceDialog(controller: controller),
     );
   }
 }
@@ -108,11 +106,13 @@ class _VoiceDialogState extends State<VoiceDialog> {
   @override
   Widget build(BuildContext context) {
     final state = _session.state;
-    final busy = state == VoiceSessionState.requestingMicrophone ||
+    final busy =
+        state == VoiceSessionState.requestingMicrophone ||
         state == VoiceSessionState.negotiating;
     final connected = state == VoiceSessionState.connected;
     final failed = state == VoiceSessionState.failed;
-    final contextLabel = widget.controller.activeConversation?.title ??
+    final contextLabel =
+        widget.controller.activeConversation?.title ??
         widget.controller.activeProject?.name ??
         'New chat';
 
@@ -171,7 +171,7 @@ class _VoiceDialogState extends State<VoiceDialog> {
             if (!connected && !busy) ...<Widget>[
               const SizedBox(height: 20),
               DropdownButtonFormField<String>(
-                value: _voice,
+                initialValue: _voice,
                 decoration: const InputDecoration(
                   labelText: 'Voice',
                   border: OutlineInputBorder(),

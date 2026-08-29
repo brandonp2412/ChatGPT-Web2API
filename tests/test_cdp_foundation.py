@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
+from sloppa.cdp_driver import CDPDriver
 
 # ── Mock websocket that delivers responses (possibly out of order) ──────
 

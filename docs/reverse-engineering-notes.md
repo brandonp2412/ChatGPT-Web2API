@@ -4,7 +4,7 @@ Findings captured from live DOM/API probing during the Phase-2 and
 composer-redesign work (Jun 2026). These describe ChatGPT's internal
 structure as observed at that time; ChatGPT changes frequently, so treat
 these as a starting map, not a contract. The `doctor` command
-(`W2A_DIAGNOSE=1`) is the supported way to re-derive this kind of
+(`SLOPPA_DIAGNOSE=1`) is the supported way to re-derive this kind of
 evidence going forward — this document captures the *knowledge* the
 one-off probes produced, not the probes themselves.
 

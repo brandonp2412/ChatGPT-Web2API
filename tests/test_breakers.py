@@ -8,8 +8,8 @@ PR1 pinned the plumbing contract; PR2 activates auto-trip + half-open recovery.
 These tests cover both the inherited PR1 invariants and the new PR2 behavior.
 """
 
-import chatgpt_web2api.breakers as breakers_mod
-from chatgpt_web2api.breakers import (
+import sloppa.breakers as breakers_mod
+from sloppa.breakers import (
     BreakerKind,
     BreakerRegistry,
     CircuitOpenError,

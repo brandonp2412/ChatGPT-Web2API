@@ -9,17 +9,18 @@ This tests the error-mapping seam directly (APIServer._error_response),
 which both the streaming and non-streaming paths use.
 """
 
+import pytest
 from aiohttp import web
 
-from chatgpt_web2api.api_server import APIServer
-from chatgpt_web2api.cdp_driver import RateLimitError
+from sloppa.api_server import APIServer
+from sloppa.cdp_driver import RateLimitError
 
 
 def _server():
     """An APIServer with a throwaway config + driver (only _error_response used)."""
     from unittest.mock import MagicMock
 
-    from chatgpt_web2api.config import Config
+    from sloppa.config import Config
     return APIServer(Config.load(None), MagicMock())
 
 
@@ -69,6 +70,25 @@ def test_timeout_error_maps_to_500():
     server = _server()
     resp = server._error_response(TimeoutError("timed out"))
     assert resp.status == 500
+
+
+@pytest.mark.asyncio
+async def test_localhost_cors_preflight_is_allowed():
+    """Flutter web can call the local bridge during development."""
+    server = _server()
+    # Exercise the middleware through aiohttp's test request helper.
+    from aiohttp.test_utils import make_mocked_request
+    req = make_mocked_request(
+        "OPTIONS", "/v1/chat/send",
+        headers={
+            "Origin": "http://127.0.0.1:18081",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    response = await server._cors(req, lambda _request: None)
+    assert response.status == 204
+    assert response.headers["Access-Control-Allow-Origin"] == "http://127.0.0.1:18081"
 
 
 def _body(resp: web.Response) -> dict:

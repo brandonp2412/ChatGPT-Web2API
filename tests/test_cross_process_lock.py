@@ -10,7 +10,7 @@ import tempfile
 
 import pytest
 
-from chatgpt_web2api.cross_process_lock import CrossProcessLock, LockAcquisitionError
+from sloppa.cross_process_lock import CrossProcessLock, LockAcquisitionError
 
 
 @pytest.mark.asyncio

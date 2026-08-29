@@ -13,9 +13,11 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import make_mocked_request
 
-from chatgpt_web2api.api_server import APIServer
-from chatgpt_web2api.config import Config
+from sloppa.api_server import APIServer
+from sloppa.config import Config
 
 
 def _make_server(driver_connected: bool = True, breakers=None):
@@ -52,6 +54,19 @@ def _health_body(server, chrome_running: bool = True) -> dict:
 
 
 @pytest.mark.asyncio
+async def test_request_context_adds_correlation_header():
+    server = _make_server()
+    request = make_mocked_request("GET", "/health")
+
+    async def handler(_request):
+        return web.Response(text="ok")
+
+    response = await server._request_context(request, handler)
+
+    assert len(response.headers["X-Request-ID"]) == 12
+
+
+@pytest.mark.asyncio
 async def test_health_healthy_when_chrome_and_driver_connected():
     """Chrome alive + driver connected + has served = "healthy"."""
     server = _make_server(driver_connected=True)
@@ -69,6 +84,7 @@ async def test_health_starting_when_connected_but_never_served():
     server = _make_server(driver_connected=True)
     body = await _health_body(server, chrome_running=True)
     assert body["status"] == "starting"
+    assert body["ready_for_requests"] is True
     assert body["chrome_running"] is True
     assert body["driver_connected"] is True
 
@@ -109,6 +125,15 @@ async def test_health_exposes_last_successful_send_at():
 
 
 @pytest.mark.asyncio
+async def test_health_exposes_active_send_count():
+    """An in-flight parity send is visible while its response is pending."""
+    server = _make_server(driver_connected=True)
+    server._active_send_count = 2
+    body = await _health_body(server, chrome_running=True)
+    assert body["active_sends"] == 2
+
+
+@pytest.mark.asyncio
 async def test_health_exposes_last_error():
     """last_error surfaces the most recent failure for diagnosis."""
     server = _make_server(driver_connected=True)
@@ -122,7 +147,7 @@ async def test_health_includes_breakers_snapshot():
     """Phase 4 PR1: /health carries a 'breakers' snapshot. On a fresh server
     every breaker is closed — PR1 records no failure signals, so this is the
     only state a real deployment will see until PR2 wires trips."""
-    from chatgpt_web2api.breakers import BreakerKind
+    from sloppa.breakers import BreakerKind
 
     server = _make_server(driver_connected=True)
     body = await _health_body(server, chrome_running=True)
@@ -152,7 +177,7 @@ async def test_health_includes_breakers_snapshot():
 )
 async def test_open_breaker_downgrades_healthy_to_degraded(kind, cooldown):
     """Every BreakerKind, when open, downgrades healthy → degraded (never broken)."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     reg = BreakerRegistry()
     # Map the exposure name back to the enum member.
@@ -170,7 +195,7 @@ async def test_open_breaker_downgrades_healthy_to_degraded(kind, cooldown):
 @pytest.mark.asyncio
 async def test_open_breaker_downgrades_starting_to_degraded():
     """An open breaker also downgrades starting → degraded."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     reg = BreakerRegistry()
     reg.trip(BreakerKind.CDP_RECONNECT, "ws down", cooldown_s=60.0)
@@ -185,7 +210,7 @@ async def test_open_breaker_downgrades_starting_to_degraded():
 async def test_broken_status_not_overridden_by_open_breaker():
     """Chrome down (broken) stays broken even with an open breaker — broken is
     a harder failure than a tripped circuit and must not be masked."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     reg = BreakerRegistry()
     reg.trip(BreakerKind.AUTH_EXPIRED, "401", cooldown_s=0)
@@ -199,7 +224,7 @@ async def test_broken_status_not_overridden_by_open_breaker():
 async def test_disconnect_degraded_not_worsened_by_open_breaker():
     """A disconnect-degraded (Chrome up, driver dead) + open breaker stays
     degraded — the breaker does not make it worse (not broken)."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     reg = BreakerRegistry()
     reg.trip(BreakerKind.CHROME_CRASH_LOOP, "crashes", cooldown_s=300.0)
@@ -213,7 +238,7 @@ async def test_disconnect_degraded_not_worsened_by_open_breaker():
 async def test_no_open_breakers_remains_healthy():
     """Regression guard: no open breakers + served → healthy (downgrade does
     not fire spuriously)."""
-    from chatgpt_web2api.breakers import BreakerRegistry
+    from sloppa.breakers import BreakerRegistry
 
     reg = BreakerRegistry()
     server = _make_server(driver_connected=True, breakers=reg)
@@ -226,7 +251,7 @@ async def test_no_open_breakers_remains_healthy():
 @pytest.mark.asyncio
 async def test_open_breakers_list_matches_tripped_kinds():
     """open_breakers is a current-state list of exactly the open kinds."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     reg = BreakerRegistry()
     reg.trip(BreakerKind.AUTH_EXPIRED, "401", cooldown_s=0)
@@ -242,7 +267,7 @@ async def test_open_breakers_list_matches_tripped_kinds():
 @pytest.mark.asyncio
 async def test_open_breakers_empty_when_all_closed():
     """open_breakers is empty when no breaker is tripped."""
-    from chatgpt_web2api.breakers import BreakerRegistry
+    from sloppa.breakers import BreakerRegistry
 
     reg = BreakerRegistry()
     server = _make_server(driver_connected=True, breakers=reg)

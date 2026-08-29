@@ -11,7 +11,7 @@ import os
 import time
 from pathlib import Path
 
-from chatgpt_web2api.tab_registry import (
+from sloppa.tab_registry import (
     LEASE_TTL_SECONDS,
     TabRegistry,
     _pid_alive,
@@ -44,15 +44,15 @@ def _write_entry(registry: TabRegistry, target_id: str, owner_pid: int,
 # ── 1. instance_id derivation ─────────────────────────────────────────
 
 def test_instance_id_override_takes_precedence(monkeypatch):
-    """W2A_INSTANCE_ID is the recommended way to run named sessions."""
-    monkeypatch.setenv("W2A_INSTANCE_ID", "pr-review")
+    """SLOPPA_INSTANCE_ID is the recommended way to run named sessions."""
+    monkeypatch.setenv("SLOPPA_INSTANCE_ID", "pr-review")
     assert TabRegistry.derive_instance_id(cdp_port=9222) == "pr-review"
 
 
 def test_instance_id_derived_from_config_when_no_override(monkeypatch):
     """Without override, identity is a stable hash of config — two different
     server identities on the same Chrome profile get DIFFERENT ids."""
-    monkeypatch.delenv("W2A_INSTANCE_ID", raising=False)
+    monkeypatch.delenv("SLOPPA_INSTANCE_ID", raising=False)
     rest_id = TabRegistry.derive_instance_id(cdp_port=9222, server_identity="rest:8080")
     mcp_id = TabRegistry.derive_instance_id(cdp_port=9222, server_identity="mcp")
     assert rest_id != mcp_id
@@ -220,7 +220,7 @@ def test_status_returns_snapshot(tmp_path):
 
 def test_driver_tab_status_includes_registry(tmp_path):
     """CDPDriver.tab_status() surfaces the registry state for /health + logs."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
     d = CDPDriver(cdp_port=9222, tab_mode="owned")
     d._target_id = "drv-tab"
     d._owns_target = True
@@ -236,7 +236,7 @@ def test_driver_tab_status_includes_registry(tmp_path):
 
 def test_driver_tab_status_no_registry_in_adopt_mode():
     """Adopt mode has no registry (no owned tabs to persist). tab_status still works."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
     d = CDPDriver(cdp_port=9222, tab_mode="adopt")
     status = d.tab_status()
     assert status["tab_mode"] == "adopt"

@@ -7,10 +7,10 @@ marked with ``@pytest.mark.e2e``. They mutate the account and need a
 logged-in browser, so they must NEVER run in normal/CI test runs.
 
 The mechanism:
-  - When ``W2A_E2E_RUN`` is unset (the default), e2e-marked items are
+  - When ``SLOPPA_E2E_RUN`` is unset (the default), e2e-marked items are
     *deselected* (silently dropped from the session) — not failed — so a
     bare ``pytest`` stays green with no account present.
-  - When ``W2A_E2E_RUN=1``, they are collected and run.
+  - When ``SLOPPA_E2E_RUN=1``, they are collected and run.
 
 The marker is also registered in ``pyproject.toml`` so pytest doesn't warn
 about unknown markers, and CI runs ``pytest -m "not e2e"`` as a belt.
@@ -24,12 +24,12 @@ import pytest
 
 
 def e2e_enabled() -> bool:
-    """True iff the operator opted into E2E tests via ``W2A_E2E_RUN=1``."""
-    return os.environ.get("W2A_E2E_RUN") == "1"
+    """True iff the operator opted into E2E tests via ``SLOPPA_E2E_RUN=1``."""
+    return os.environ.get("SLOPPA_E2E_RUN") == "1"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Deselect e2e-marked items unless ``W2A_E2E_RUN=1``.
+    """Deselect e2e-marked items unless ``SLOPPA_E2E_RUN=1``.
 
     Deselect (not fail) so the default suite is green without a browser or
     account. With the flag set, the items run normally.
@@ -46,7 +46,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     if items is not None and e2e_items:
         print(
             f"\n[e2e] Deselected {len(e2e_items)} end-to-end test(s); "
-            "set W2A_E2E_RUN=1 to run them against a real ChatGPT account."
+            "set SLOPPA_E2E_RUN=1 to run them against a real ChatGPT account."
         )
 
 
@@ -63,26 +63,11 @@ import time
 
 import pytest_asyncio  # noqa: E402
 
-from chatgpt_web2api.cdp_driver import CDPDriver  # noqa: E402
-from chatgpt_web2api.chrome import ChromeProcess  # noqa: E402
-from chatgpt_web2api.config import Config  # noqa: E402
+from sloppa.cdp_driver import CDPDriver  # noqa: E402
+from sloppa.chrome import ChromeProcess  # noqa: E402
+from sloppa.config import Config  # noqa: E402
 
 E2E_LOGIN_TIMEOUT = 600  # seconds to wait for interactive login
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """One event loop for the whole session.
-
-    E2E session fixtures (e2e_driver) open a long-lived websocket that must
-    stay alive across tests. pytest-asyncio gives each test its own loop by
-    default, which would leave the session-scoped websocket bound to a dead
-    loop ("got Future attached to a different loop"). Sharing one loop across
-    the session keeps the driver's connection valid for every e2e test.
-    """
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="session")
@@ -111,9 +96,9 @@ def e2e_config() -> Config:
 # Minimum seconds to wait before an e2e test that sends a chat message.
 # ChatGPT rate-limits rapid consecutive send_and_stream calls ("Too many
 # requests"). Pacing each chat-bearing test avoids tripping the limit.
-# 20s is a safe default; raise via W2A_E2E_PACE if the account still gets
+# 20s is a safe default; raise via SLOPPA_E2E_PACE if the account still gets
 # throttled, lower for a faster (but riskier) run.
-E2E_CHAT_PACE_SECONDS = float(os.environ.get("W2A_E2E_PACE", "20"))
+E2E_CHAT_PACE_SECONDS = float(os.environ.get("SLOPPA_E2E_PACE", "20"))
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -121,7 +106,7 @@ async def e2e_pace_before_chat(request):
     """Sleep before each e2e test so chat operations don't burst-limit.
 
     Only paces e2e-marked tests; non-e2e tests are unaffected. The delay is
-    configurable via W2A_E2E_PACE (seconds). Reads are cheap and could skip
+    configurable via SLOPPA_E2E_PACE (seconds). Reads are cheap and could skip
     this, but a uniform small pace keeps the whole suite polite to the host.
     """
     if request.node.get_closest_marker("e2e") is None:
@@ -148,7 +133,7 @@ def pytest_runtest_makereport(item, call):
         return
     if item.get_closest_marker("e2e") is None:
         return
-    from chatgpt_web2api.cdp_driver import RateLimitError
+    from sloppa.cdp_driver import RateLimitError
 
     # The exception is recorded on the call's excinfo.
     if call.excinfo and isinstance(call.excinfo.value, RateLimitError):
@@ -239,9 +224,9 @@ async def e2e_sse_server(e2e_login_ready, e2e_config: Config) -> str:
     """
     import socket as _socket
 
-    import chatgpt_web2api.mcp_server as mod
+    import sloppa.mcp_server as mod
 
-    port = int(os.environ.get("W2A_SSE_PORT", "18090"))
+    port = int(os.environ.get("SLOPPA_SSE_PORT", "18090"))
 
     # Fail clearly if the chosen port is already occupied (avoids a confusing
     # "address in use" from uvicorn mid-test).
@@ -250,7 +235,7 @@ async def e2e_sse_server(e2e_login_ready, e2e_config: Config) -> str:
             probe.bind(("127.0.0.1", port))
         except OSError as e:
             raise RuntimeError(
-                f"e2e_sse_server: port {port} is occupied. Set W2A_SSE_PORT to a free port. ({e})"
+                f"e2e_sse_server: port {port} is occupied. Set SLOPPA_SSE_PORT to a free port. ({e})"
             )
 
     # Dedicated driver for the SSE server this test, separate from the

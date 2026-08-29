@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp.test_utils import make_mocked_request
 
-from chatgpt_web2api.parity_privacy_api import PrivacyParityAPIServer
-from chatgpt_web2api.parity_secure_api import _client_view
+from sloppa.parity_privacy_api import PrivacyParityAPIServer
+from sloppa.parity_secure_api import _client_view
 
 
 def test_client_view_does_not_surface_hidden_raw_context():

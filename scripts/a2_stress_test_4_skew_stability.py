@@ -45,7 +45,8 @@ async def bridge_send_get_uuid_and_skew(ws, token, marker):
     """Single instrumented send: returns {skew, uuid_captured, uuid_survived, stale}."""
     nxt = [0]
     def nid():
-        nxt[0] += 1; return nxt[0]
+        nxt[0] += 1
+        return nxt[0]
 
     async def evaluate(expr, timeout_ms=15000):
         my_id = nid()
@@ -61,7 +62,7 @@ async def bridge_send_get_uuid_and_skew(ws, token, marker):
     while True:
         try:
             _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             break
 
     t_pre_wall = time.time()
@@ -79,7 +80,7 @@ async def bridge_send_get_uuid_and_skew(ws, token, marker):
     while time.time() < deadline:
         try:
             raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             if send_task.done() and time.time() > t_pre_wall + 8:
                 break
             continue
@@ -182,7 +183,8 @@ async def main():
     async with websockets.connect(ws_url, max_size=None) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         # Enable Network + get token (once, persistent)
         await ws.send(json.dumps({"id": nid(), "method": "Network.enable",
@@ -213,7 +215,7 @@ async def main():
         all_batches.append({"batch": 1, "label": "baseline", "results": b1})
 
         # Batch 2: after 90s
-        print(f"\n--- sleeping 90s before batch 2 ---", flush=True)
+        print("\n--- sleeping 90s before batch 2 ---", flush=True)
         await asyncio.sleep(90)
         print(f"\n=== Batch 2: AFTER 90S (t={time.strftime('%H:%M:%S')}) ===", flush=True)
         b2 = await run_batch(ws, token, 2)
@@ -247,7 +249,7 @@ async def main():
     neg = [s for s in all_skews if s < 0]
     print(f"negative-skew samples: {len(neg)}")
     if len(neg) == 0:
-        print(f"VERDICT: skew stable and all-positive across time + reconnect. SKEW_TOLERANCE=8 validated.")
+        print("VERDICT: skew stable and all-positive across time + reconnect. SKEW_TOLERANCE=8 validated.")
     else:
         print(f"VERDICT: {len(neg)} negative samples observed — tolerance may need widening.")
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from chatgpt_web2api.turn_anchor import (
+from sloppa.turn_anchor import (
     TurnAnchor,
     TurnEndResult,
     collapse_to_end_turn_status,

@@ -18,14 +18,13 @@ Fix 1: after click_send + UUID wait, verify at least one acknowledgment:
 Fix 2: include last_result.diagnostic in TurnReconciliationError.
 """
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, SendReadinessError
-from chatgpt_web2api.turn_anchor import TurnReconciliationError, TurnTextResult
+from sloppa.cdp_driver import CDPDriver
+from sloppa.turn_anchor import TurnReconciliationError
 
 
 def _make_driver():
@@ -49,8 +48,6 @@ async def test_send_not_acknowledged_raises_when_no_signals(monkeypatch):
     """When click_send fires but no acknowledgment appears (no UUID, no DOM
     count increase, composer not cleared), the bridge must raise a typed error
     instead of silently entering completion detection."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
-
     driver = _make_driver()
     # Mock the send path
     driver.type_message = AsyncMock()
@@ -102,13 +99,11 @@ async def test_send_acknowledged_when_user_count_increases(monkeypatch):
     driver._pre_send_user_count = 0  # fresh chat, no prior user messages
 
     # Mock the anchor + fallback
-    from chatgpt_web2api.turn_anchor import TurnAnchor
+    from sloppa.turn_anchor import TurnAnchor
     anchor = TurnAnchor(sent_text="test", mode="fresh_chat")
     driver._capture_pre_send_fallback_anchor = AsyncMock(return_value=anchor)
 
     # After send: user count goes from 0 to 1 (message landed)
-    poll_count = {"n": 0}
-
     async def fake_js_strict(expr, timeout=15):
         # Send acknowledgment check: user count + composer present + empty
         if "userCount" in expr and "composerEmpty" in expr:
@@ -126,12 +121,11 @@ async def test_send_acknowledged_when_user_count_increases(monkeypatch):
     driver._js_strict = fake_js_strict
 
     # Mock the detector to return immediately
-    from chatgpt_web2api.completion_detector import CompletionDetector
     driver._completion = MagicMock()
     driver._completion.stream_until_complete = MagicMock()
 
     async def fake_stream(**kwargs):
-        from chatgpt_web2api.cdp_driver import StreamChunk
+        from sloppa.cdp_driver import StreamChunk
         yield StreamChunk(delta="ok")
     driver._completion.stream_until_complete = fake_stream
     driver._completion.last_dom_text = "ok"
@@ -142,6 +136,26 @@ async def test_send_acknowledged_when_user_count_increases(monkeypatch):
     async for chunk in driver.send_and_stream("test message", timeout=10):
         chunks.append(chunk)
     assert len(chunks) > 0
+
+
+@pytest.mark.asyncio
+async def test_send_acknowledged_when_signals_arrive_on_different_polls():
+    """A new-chat send may render the message and clear the composer separately."""
+    driver = _make_driver()
+    driver._pre_send_user_count = 0
+    polls = iter([
+        {"userCount": 1, "composerPresent": True, "composerEmpty": False},
+        {"userCount": 1, "composerPresent": True, "composerEmpty": True},
+    ])
+
+    async def fake_js_strict(expr, timeout=15):
+        if "userCount" in expr and "composerEmpty" in expr:
+            return json.dumps(next(polls))
+        return "0"
+
+    driver._js_strict = fake_js_strict
+
+    assert await driver._verify_send_acknowledged() is True
 
 
 # ── 2. Diagnostic preservation in TurnReconciliationError ────────────────

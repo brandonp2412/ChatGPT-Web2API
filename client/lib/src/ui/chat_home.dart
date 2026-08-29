@@ -40,10 +40,14 @@ class _ChatHomeState extends State<ChatHome> {
       animation: controller,
       builder: (BuildContext context, Widget? child) {
         if (!controller.initialized) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (controller.sending) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _scrollToBottom(),
+          );
         }
         return LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
@@ -74,7 +78,9 @@ class _ChatHomeState extends State<ChatHome> {
                   ),
                   IconButton(
                     tooltip: 'Refresh',
-                    onPressed: controller.connecting ? null : () => controller.connect(),
+                    onPressed: controller.connecting
+                        ? null
+                        : () => controller.connect(),
                     icon: controller.connecting
                         ? const SizedBox(
                             width: 18,
@@ -97,57 +103,61 @@ class _ChatHomeState extends State<ChatHome> {
                       onSelected: _handleConversationMenu,
                       itemBuilder: (BuildContext context) =>
                           <PopupMenuEntry<_ConversationMenuAction>>[
-                        const PopupMenuItem(
-                          value: _ConversationMenuAction.rename,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.edit_outlined),
-                            title: Text('Rename'),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: _ConversationMenuAction.pin,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(
-                              controller.activeConversationPinned
-                                  ? Icons.push_pin
-                                  : Icons.push_pin_outlined,
+                            const PopupMenuItem(
+                              value: _ConversationMenuAction.rename,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(Icons.edit_outlined),
+                                title: Text('Rename'),
+                              ),
                             ),
-                            title: Text(
-                              controller.activeConversationPinned ? 'Unpin' : 'Pin',
+                            PopupMenuItem(
+                              value: _ConversationMenuAction.pin,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(
+                                  controller.activeConversationPinned
+                                      ? Icons.push_pin
+                                      : Icons.push_pin_outlined,
+                                ),
+                                title: Text(
+                                  controller.activeConversationPinned
+                                      ? 'Unpin'
+                                      : 'Pin',
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: _ConversationMenuAction.share,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.ios_share_outlined),
-                            title: Text('Share'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: _ConversationMenuAction.archive,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.archive_outlined),
-                            title: Text('Archive'),
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: _ConversationMenuAction.delete,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.delete_outline),
-                            title: Text('Delete'),
-                          ),
-                        ),
-                      ],
+                            const PopupMenuItem(
+                              value: _ConversationMenuAction.share,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(Icons.ios_share_outlined),
+                                title: Text('Share'),
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: _ConversationMenuAction.archive,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(Icons.archive_outlined),
+                                title: Text('Archive'),
+                              ),
+                            ),
+                            const PopupMenuItem(
+                              value: _ConversationMenuAction.delete,
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Delete'),
+                              ),
+                            ),
+                          ],
                     ),
                   IconButton(
                     tooltip: 'Memory',
-                    onPressed: controller.connected ? () => _showMemories(context) : null,
+                    onPressed: controller.connected
+                        ? () => _showMemories(context)
+                        : null,
                     icon: const Icon(Icons.psychology_outlined),
                   ),
                   IconButton(
@@ -165,7 +175,9 @@ class _ChatHomeState extends State<ChatHome> {
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           border: Border(
-                            right: BorderSide(color: Theme.of(context).dividerColor),
+                            right: BorderSide(
+                              color: Theme.of(context).dividerColor,
+                            ),
                           ),
                         ),
                         child: sidebar,
@@ -226,15 +238,55 @@ class _ChatHomeState extends State<ChatHome> {
 
   Widget _messageList() {
     final messageCount = controller.visibleMessages.length;
-    final reports = controller.activeConversation?.researchReports ??
+    final reports =
+        controller.activeConversation?.researchReports ??
         const <ResearchReport>[];
     final total = messageCount + reports.length;
     if (total == 0) {
+      final error = controller.errorMessage;
+      if (error != null) {
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: <Widget>[
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Icon(Icons.error_outline, size: 42),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Could not load this chat',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(error, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: controller.connecting
+                              ? null
+                              : () => controller.connect(),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
       final contextLabel = controller.activeProject != null
           ? ' in ${controller.activeProject!.name}'
           : controller.activeGpt != null
-              ? ' with ${controller.activeGpt!.name}'
-              : '';
+          ? ' with ${controller.activeGpt!.name}'
+          : '';
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -261,11 +313,7 @@ class _ChatHomeState extends State<ChatHome> {
             onRegenerate: controller.regenerate,
             onEdit: controller.editMessage,
             onBranchInNewChat: controller.branchInNewChat,
-            onBlockAction: (
-              ChatMessage message,
-              String action,
-              String? text,
-            ) =>
+            onBlockAction: (ChatMessage message, String action, String? text) =>
                 controller.runBlockAction(message, action, text: text),
             onFeedback: controller.sendFeedback,
           );
@@ -343,23 +391,23 @@ class _ChatHomeState extends State<ChatHome> {
                     },
                     itemBuilder: (BuildContext context) =>
                         const <PopupMenuEntry<_AttachmentAction>>[
-                      PopupMenuItem(
-                        value: _AttachmentAction.upload,
-                        child: ListTile(
-                          dense: true,
-                          leading: Icon(Icons.upload_file_outlined),
-                          title: Text('Upload files'),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _AttachmentAction.library,
-                        child: ListTile(
-                          dense: true,
-                          leading: Icon(Icons.folder_copy_outlined),
-                          title: Text('Add from Library'),
-                        ),
-                      ),
-                    ],
+                          PopupMenuItem(
+                            value: _AttachmentAction.upload,
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(Icons.upload_file_outlined),
+                              title: Text('Upload files'),
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _AttachmentAction.library,
+                            child: ListTile(
+                              dense: true,
+                              leading: Icon(Icons.folder_copy_outlined),
+                              title: Text('Add from Library'),
+                            ),
+                          ),
+                        ],
                     icon: const Icon(Icons.add),
                   ),
                   Expanded(
@@ -403,14 +451,11 @@ class _ChatHomeState extends State<ChatHome> {
   }
 
   Future<void> _pickFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: false,
-    );
-    if (result == null) {
-      return;
-    }
-    for (final file in result.files) {
+    // Multi-attachment selection still uses this compatibility flag while
+    // file_picker migrates its API.
+    // ignore: deprecated_member_use
+    final result = await FilePicker.pickFiles(allowMultiple: true);
+    for (final file in result) {
       final path = file.path;
       if (path != null && path.isNotEmpty) {
         await controller.addAttachment(File(path));
@@ -488,7 +533,7 @@ class _ChatHomeState extends State<ChatHome> {
   }
 
   void _scrollToBottom() {
-    if (!_messages.hasClients) {
+    if (!mounted || !_messages.hasClients) {
       return;
     }
     _messages.animateTo(
@@ -557,10 +602,7 @@ class _ChatHomeState extends State<ChatHome> {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         title: const Text('Share chat'),
-        content: SizedBox(
-          width: 520,
-          child: SelectableText(display),
-        ),
+        content: SizedBox(width: 520, child: SelectableText(display)),
         actions: <Widget>[
           TextButton.icon(
             onPressed: () => Clipboard.setData(ClipboardData(text: display)),
@@ -619,7 +661,7 @@ class _ChatHomeState extends State<ChatHome> {
 
   Future<void> _showMemories(BuildContext context) async {
     await controller.loadMemories();
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
     final input = TextEditingController();
@@ -674,7 +716,9 @@ class _ChatHomeState extends State<ChatHome> {
                                     : IconButton(
                                         tooltip: 'Delete memory',
                                         onPressed: () async {
-                                          await controller.deleteMemory(item.id);
+                                          await controller.deleteMemory(
+                                            item.id,
+                                          );
                                           setDialogState(() {});
                                         },
                                         icon: const Icon(Icons.delete_outline),
@@ -735,10 +779,10 @@ class _ChatHomeState extends State<ChatHome> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(
-              context,
-              (name.text.trim(), instructions.text.trim()),
-            ),
+            onPressed: () => Navigator.pop(context, (
+              name.text.trim(),
+              instructions.text.trim(),
+            )),
             child: const Text('Create'),
           ),
         ],
@@ -764,10 +808,12 @@ class _ChatHomeState extends State<ChatHome> {
       return;
     }
     await controller.loadActiveProjectFiles(silent: true);
-    if (!mounted) {
+    if (!context.mounted) {
       return;
     }
-    final instructions = TextEditingController(text: project.instructions ?? '');
+    final instructions = TextEditingController(
+      text: project.instructions ?? '',
+    );
     final action = await showDialog<_ProjectDialogAction>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
@@ -799,9 +845,13 @@ class _ChatHomeState extends State<ChatHome> {
                         itemBuilder: (BuildContext context, int index) {
                           final file = controller.activeProjectFiles[index];
                           return ListTile(
-                            leading: const Icon(Icons.insert_drive_file_outlined),
+                            leading: const Icon(
+                              Icons.insert_drive_file_outlined,
+                            ),
                             title: Text(file.name),
-                            subtitle: file.mimeType == null ? null : Text(file.mimeType!),
+                            subtitle: file.mimeType == null
+                                ? null
+                                : Text(file.mimeType!),
                             trailing: IconButton(
                               tooltip: 'Download',
                               onPressed: () => _saveProjectFile(project, file),
@@ -816,7 +866,8 @@ class _ChatHomeState extends State<ChatHome> {
         ),
         actions: <Widget>[
           TextButton(
-            onPressed: () => Navigator.pop(context, _ProjectDialogAction.delete),
+            onPressed: () =>
+                Navigator.pop(context, _ProjectDialogAction.delete),
             child: const Text('Delete project'),
           ),
           TextButton(
@@ -833,6 +884,9 @@ class _ChatHomeState extends State<ChatHome> {
     if (action == _ProjectDialogAction.save) {
       await controller.updateActiveProjectInstructions(instructions.text);
     } else if (action == _ProjectDialogAction.delete) {
+      if (!context.mounted) {
+        return;
+      }
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext context) => AlertDialog(
@@ -857,21 +911,27 @@ class _ChatHomeState extends State<ChatHome> {
     instructions.dispose();
   }
 
-  Future<void> _saveProjectFile(ProjectSummary project, ProjectFile file) async {
+  Future<void> _saveProjectFile(
+    ProjectSummary project,
+    ProjectFile file,
+  ) async {
     try {
-      final path = await FilePicker.platform.saveFile(
+      final bytes = await controller.actions.projectFileBytes(
+        project.id,
+        file.id,
+      );
+      final path = await FilePicker.saveFile(
         dialogTitle: 'Save project file',
         fileName: _safeFileName(file.name),
+        bytes: bytes,
       );
-      if (path == null || path.isEmpty) {
+      if (path == null) {
         return;
       }
-      final bytes = await controller.actions.projectFileBytes(project.id, file.id);
-      await File(path).writeAsBytes(bytes, flush: true);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Project file saved')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Project file saved')));
       }
     } on Object catch (error) {
       if (mounted) {
@@ -915,7 +975,8 @@ class _ChatHomeState extends State<ChatHome> {
                       enableSuggestions: false,
                       decoration: const InputDecoration(
                         labelText: 'Bridge API key',
-                        helperText: 'Stored in OS secure storage. This is not an OpenAI key.',
+                        helperText:
+                            'Stored in OS secure storage. This is not an OpenAI key.',
                       ),
                     ),
                   ],
@@ -1001,7 +1062,8 @@ class _ComposerControls extends StatelessWidget {
         ? controller.selectedMode
         : 'normal';
     final reasoningItems = <String>['auto', ...controller.reasoningLevels];
-    final selectedReasoning = controller.selectedReasoningLevel != null &&
+    final selectedReasoning =
+        controller.selectedReasoningLevel != null &&
             reasoningItems.contains(controller.selectedReasoningLevel)
         ? controller.selectedReasoningLevel!
         : 'auto';
@@ -1012,8 +1074,8 @@ class _ComposerControls extends StatelessWidget {
         ? controller.selectedModel
         : models.first;
     final apps = <String>['none', ...controller.appLabels];
-    final selectedApp = controller.selectedApp != null &&
-            apps.contains(controller.selectedApp)
+    final selectedApp =
+        controller.selectedApp != null && apps.contains(controller.selectedApp)
         ? controller.selectedApp!
         : 'none';
 
@@ -1064,7 +1126,9 @@ class _ComposerControls extends StatelessWidget {
             FilterChip(
               label: const Text('Temporary'),
               selected: controller.temporaryChat,
-              onSelected: controller.sending ? null : controller.setTemporaryChat,
+              onSelected: controller.sending
+                  ? null
+                  : controller.setTemporaryChat,
             ),
           ],
         ],
@@ -1172,16 +1236,6 @@ class _Sidebar extends StatelessWidget {
                 icon: Icon(Icons.chat_bubble_outline, size: 17),
                 tooltip: 'Chats',
               ),
-              ButtonSegment(
-                value: SidebarSection.projects,
-                icon: Icon(Icons.folder_outlined, size: 17),
-                tooltip: 'Projects',
-              ),
-              ButtonSegment(
-                value: SidebarSection.gpts,
-                icon: Icon(Icons.explore_outlined, size: 17),
-                tooltip: 'GPTs',
-              ),
             ],
             selected: <SidebarSection>{controller.sidebarSection},
             onSelectionChanged: (Set<SidebarSection> selection) {
@@ -1198,14 +1252,17 @@ class _Sidebar extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.tonalIcon(
               onPressed: () {
-                final keepContext = controller.activeProject != null &&
+                final keepContext =
+                    controller.activeProject != null &&
                     controller.sidebarSection == SidebarSection.projects;
                 controller.newChat(keepContext: keepContext);
                 _closeDrawer(context);
               },
               icon: const Icon(Icons.edit_outlined, size: 18),
               label: Text(
-                controller.activeProject != null ? 'New project chat' : 'New chat',
+                controller.activeProject != null
+                    ? 'New project chat'
+                    : 'New chat',
               ),
             ),
           ),
@@ -1287,13 +1344,11 @@ class _Sidebar extends StatelessWidget {
           dense: true,
           selected: selected,
           selectedTileColor: Theme.of(context).colorScheme.secondaryContainer,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          leading: pinned ? const Icon(Icons.push_pin, size: 15) : null,
-          title: Text(
-            item.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
+          leading: pinned ? const Icon(Icons.push_pin, size: 15) : null,
+          title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
           onTap: () {
             controller.selectConversation(item.id);
             _closeDrawer(context);
@@ -1321,7 +1376,10 @@ class _Sidebar extends StatelessWidget {
           child: controller.projects.isEmpty
               ? const Center(child: Text('No projects'))
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
                   itemCount: controller.projects.length,
                   itemBuilder: (BuildContext context, int index) {
                     final item = controller.projects[index];

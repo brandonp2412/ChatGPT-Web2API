@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, RateLimitError, StreamChunk
+from sloppa.cdp_driver import CDPDriver, RateLimitError, StreamChunk
 
 # ── Helpers ─────────────────────────────────────────────────────
 
@@ -57,8 +57,8 @@ def _failing_callback():
 async def test_chat_completion_progress_cadence():
     """Callback fires: once on first delta, coalesced every Nth, once on
     terminal — and the full response is still returned correctly."""
-    from chatgpt_web2api import mcp_server
-    from chatgpt_web2api.mcp_server import _PROGRESS_EVERY_N_CHUNKS
+    from sloppa import mcp_server
+    from sloppa.mcp_server import _PROGRESS_EVERY_N_CHUNKS
 
     # 25 deltas → expect fire on 1, N, 2N, terminal
     n = _PROGRESS_EVERY_N_CHUNKS
@@ -80,7 +80,7 @@ async def test_chat_completion_progress_cadence():
 async def test_chat_completion_progress_none_default():
     """With on_progress=None (default), no callback work happens and the
     response is still correct — backward compatible."""
-    from chatgpt_web2api import mcp_server
+    from sloppa import mcp_server
     driver = _streaming_driver(["Hello", " world"])
     result = await mcp_server.do_chat_completion(driver, {"message": "hi"}, None)
     assert result["content"] == "Hello world"
@@ -126,7 +126,7 @@ async def test_callback_failure_does_not_abort_tool_call():
     """If on_progress raises (transport error), the business loop continues
     and the full response is still returned — never abort a 40s generation
     over a transient notification failure."""
-    from chatgpt_web2api import mcp_server
+    from sloppa import mcp_server
     driver = _streaming_driver(["chunkA ", "chunkB ", "chunkC "])
     result = await mcp_server.do_chat_completion(
         driver, {"message": "hi"}, None, on_progress=_failing_callback(),
@@ -142,7 +142,7 @@ async def test_backoff_notifies_before_sleep(monkeypatch):
     """The backoff notification MUST fire BEFORE the sleep — this ordering is
     load-bearing (otherwise the timeout problem returns). We assert it
     structurally by recording a shared sequence list."""
-    from chatgpt_web2api import resilience
+    from sloppa import resilience
 
     # Shared sequence recorder — both the callback and the (faked) sleep append.
     sequence = []
@@ -188,7 +188,7 @@ async def test_backoff_notifies_before_sleep(monkeypatch):
 @pytest.mark.asyncio
 async def test_backoff_no_callback_still_works(monkeypatch):
     """retry_on_rate_limit with on_progress=None (default) behaves as before."""
-    from chatgpt_web2api import resilience
+    from sloppa import resilience
     driver = MagicMock()
     driver.dismiss_rate_limit = AsyncMock(return_value=True)
     call_count = {"n": 0}
@@ -230,8 +230,8 @@ async def test_coalescing_no_per_delta_flood():
     """Exactly the expected number of calls for a known chunk count — no
     per-delta flooding. For 30 chunks with N=10: first(1) + 10th + 20th + 30th
     + terminal = 5 calls."""
-    from chatgpt_web2api import mcp_server
-    from chatgpt_web2api.mcp_server import _PROGRESS_EVERY_N_CHUNKS
+    from sloppa import mcp_server
+    from sloppa.mcp_server import _PROGRESS_EVERY_N_CHUNKS
     n = _PROGRESS_EVERY_N_CHUNKS
     total_chunks = 30
     deltas = [f"d{i} " for i in range(total_chunks)]
@@ -252,7 +252,7 @@ async def test_create_memory_emits_single_progress():
     """do_create_memory emits exactly one 'Creating memory…' notification
     before delegating to the driver (it doesn't expose its internal stream
     at this layer)."""
-    from chatgpt_web2api import mcp_server
+    from sloppa import mcp_server
     driver = MagicMock(spec=CDPDriver)
     driver.create_memory = AsyncMock(return_value={"success": True, "memory_id": "m1"})
     record = []

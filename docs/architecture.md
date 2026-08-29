@@ -2,7 +2,7 @@
 
 ## System Overview
 
-ChatGPT-Web2API is a CDP-driven proxy that sits between your code and ChatGPT's web interface. It controls a real Chrome browser via the Chrome DevTools Protocol (CDP) to type messages, click buttons, and read responses.
+Sloppa is a CDP-driven proxy that sits between your code and ChatGPT's web interface. It controls a real Chrome browser via the Chrome DevTools Protocol (CDP) to type messages, click buttons, and read responses.
 
 ```
                          ┌──────────────────────────────────┐
@@ -22,7 +22,7 @@ ChatGPT-Web2API is a CDP-driven proxy that sits between your code and ChatGPT's 
 ## Module Architecture
 
 ```
-src/chatgpt_web2api/
+src/sloppa/
 │
 ├── __main__.py        CLI entrypoint
 │   └── Parses CLI args, calls service.run()

@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, SendReadinessError
-from chatgpt_web2api.chatgpt_dom import ChatGPTDom
+from sloppa.cdp_driver import CDPDriver, SendReadinessError
+from sloppa.chatgpt_dom import ChatGPTDom
 
 
 @pytest.fixture(autouse=True)
@@ -35,8 +35,8 @@ def _fast_poll(monkeypatch):
         _t[0] += _d  # advance simulated time by the sleep duration
         await _real_sleep(0)
 
-    monkeypatch.setattr("chatgpt_web2api.chatgpt_dom.asyncio.sleep", _instant)
-    monkeypatch.setattr("chatgpt_web2api.chatgpt_dom.time.monotonic", lambda: _t[0])
+    monkeypatch.setattr("sloppa.chatgpt_dom.asyncio.sleep", _instant)
+    monkeypatch.setattr("sloppa.chatgpt_dom.time.monotonic", lambda: _t[0])
 
 
 def _make_dom(diag_json=None):

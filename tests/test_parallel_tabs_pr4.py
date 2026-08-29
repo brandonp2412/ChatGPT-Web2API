@@ -19,10 +19,10 @@ import json
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.lock_resolver import OwnedTabRequiredError
-from chatgpt_web2api.mcp_server import _mcp_server_identity
+from sloppa.cdp_driver import CDPDriver
+from sloppa.config import Config
+from sloppa.lock_resolver import OwnedTabRequiredError
+from sloppa.mcp_server import _mcp_server_identity
 
 # ── 1 & 2: config ────────────────────────────────────────────────────────
 
@@ -34,10 +34,10 @@ def test_config_default_parallel_tabs_false():
 
 
 def test_config_env_parallel_tabs_roundtrip(monkeypatch, tmp_path):
-    """W2A_PARALLEL_TABS env var sets the flag; to_dict serializes it."""
+    """SLOPPA_PARALLEL_TABS env var sets the flag; to_dict serializes it."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setenv("W2A_PARALLEL_TABS", "true")
+    monkeypatch.setenv("SLOPPA_PARALLEL_TABS", "true")
     cfg = Config.load(None)
     assert cfg.chatgpt.parallel_tabs is True
     assert cfg.to_dict()["parallel_tabs"] is True
@@ -47,8 +47,8 @@ def test_config_parallel_tabs_requires_owned(monkeypatch, tmp_path):
     """parallel_tabs=true + tab_mode=adopt raises ValueError at load."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setenv("W2A_PARALLEL_TABS", "true")
-    monkeypatch.setenv("W2A_TAB_MODE", "adopt")
+    monkeypatch.setenv("SLOPPA_PARALLEL_TABS", "true")
+    monkeypatch.setenv("SLOPPA_TAB_MODE", "adopt")
     with pytest.raises(ValueError, match="parallel_tabs=true requires tab_mode=owned"):
         Config.load(None)
 
@@ -57,7 +57,7 @@ def test_config_parallel_tabs_string_false_not_misparsed(monkeypatch, tmp_path):
     """The string 'false' must NOT enable parallel_tabs (the _as_bool guard)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setenv("W2A_PARALLEL_TABS", "false")
+    monkeypatch.setenv("SLOPPA_PARALLEL_TABS", "false")
     cfg = Config.load(None)
     assert cfg.chatgpt.parallel_tabs is False
 
@@ -88,11 +88,11 @@ def test_mcp_identity_parallel_stdio_includes_pid():
     assert pid > 0
 
 
-def test_mcp_identity_w2a_instance_id_still_overrides(monkeypatch):
-    """W2A_INSTANCE_ID wins over the derived identity (in derive_instance_id)."""
-    from chatgpt_web2api.tab_registry import TabRegistry
+def test_mcp_identity_sloppa_instance_id_still_overrides(monkeypatch):
+    """SLOPPA_INSTANCE_ID wins over the derived identity (in derive_instance_id)."""
+    from sloppa.tab_registry import TabRegistry
 
-    monkeypatch.setenv("W2A_INSTANCE_ID", "my-stable-id")
+    monkeypatch.setenv("SLOPPA_INSTANCE_ID", "my-stable-id")
     cfg = Config()
     cfg.chatgpt.parallel_tabs = True
     ident = TabRegistry.derive_instance_id(
@@ -129,7 +129,7 @@ async def test_connect_parallel_refuses_shared_fallback(monkeypatch):
     d._ensure_send_ready = lambda: None  # type: ignore[method-assign]
     d._start_heartbeat = lambda: None  # type: ignore[method-assign]
     # Bypass the pre-owned-tab WS discovery (ws_url is None → owned creation path)
-    import chatgpt_web2api.cdp_driver as drv
+    import sloppa.cdp_driver as drv
 
     monkeypatch.setattr(
         drv, "websockets", type("W", (), {"connect": lambda *a, **k: None})()
@@ -176,7 +176,7 @@ async def test_reconnect_parallel_refuses_fallback(monkeypatch):
 
 def test_rest_maps_owned_tab_required_to_503():
     """APIServer._error_response returns 503 with code=owned_tab_required."""
-    from chatgpt_web2api import api_server as srv
+    from sloppa import api_server as srv
 
     server = srv.APIServer.__new__(srv.APIServer)
     server._last_error = None
@@ -200,7 +200,7 @@ def test_rest_maps_owned_tab_required_to_503():
 def test_resolver_drift_detection():
     """resolve_mutation_lock returns a different key when target_id changes,
     so the call-site drift guard (current_key != key) would catch it."""
-    from chatgpt_web2api.lock_resolver import resolve_mutation_lock
+    from sloppa.lock_resolver import resolve_mutation_lock
 
     d = CDPDriver(cdp_port=9222)
     d._target_id = "AAA"

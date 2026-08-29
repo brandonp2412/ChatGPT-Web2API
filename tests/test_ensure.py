@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import chatgpt_web2api.ensure as ensure_mod
-from chatgpt_web2api.ensure import (
+import sloppa.ensure as ensure_mod
+from sloppa.ensure import (
     _build_rest_cmd,
     _build_sse_cmd,
     run_ensure,

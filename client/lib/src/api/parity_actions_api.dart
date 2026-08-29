@@ -9,16 +9,16 @@ import 'bridge_client.dart';
 
 class ParityActionsApi {
   ParityActionsApi(this.settings, {http.Client? client})
-      : _http = client ?? http.Client();
+    : _http = client ?? http.Client();
 
   final BridgeSettings settings;
   final http.Client _http;
 
   Map<String, String> get _headers => <String, String>{
-        'Accept': 'application/json',
-        if (settings.apiKey.trim().isNotEmpty)
-          'Authorization': 'Bearer ${settings.apiKey.trim()}',
-      };
+    'Accept': 'application/json',
+    if (settings.apiKey.trim().isNotEmpty)
+      'Authorization': 'Bearer ${settings.apiKey.trim()}',
+  };
 
   Uri _uri(String path, [Map<String, String>? query]) {
     final root = BridgeSettings.normalizedBaseUrl(settings.baseUrl);
@@ -38,10 +38,7 @@ class ParityActionsApi {
     final response = await _post(
       '/v1/conversations/${Uri.encodeComponent(conversationId)}'
       '/blocks/${Uri.encodeComponent(messageId)}/actions',
-      <String, dynamic>{
-        'action': action,
-        if (text != null) 'text': text,
-      },
+      <String, dynamic>{'action': action, if (text != null) 'text': text},
     );
     final conversation = response['conversation'];
     if (conversation is! Map) {
@@ -123,9 +120,14 @@ class ParityActionsApi {
       return const <MemoryItem>[];
     }
     return data
-        .whereType<Map>()
-        .map((Map item) => MemoryItem.fromJson(item.cast<String, dynamic>()))
-        .where((MemoryItem item) => item.id.isNotEmpty || item.content.isNotEmpty)
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (Map<Object?, Object?> item) =>
+              MemoryItem.fromJson(item.cast<String, dynamic>()),
+        )
+        .where(
+          (MemoryItem item) => item.id.isNotEmpty || item.content.isNotEmpty,
+        )
         .toList(growable: false);
   }
 
@@ -185,33 +187,30 @@ class ParityActionsApi {
       '/v1/projects/${Uri.encodeComponent(projectId)}/files',
     );
     final data = response['data'];
-    final raw = data is Map
+    final raw = data is Map<Object?, Object?>
         ? data['items'] ?? data['files'] ?? data['data']
         : data;
     if (raw is! List) {
       return const <ProjectFile>[];
     }
     return raw
-        .whereType<Map>()
-        .map((Map item) => ProjectFile.fromJson(item.cast<String, dynamic>()))
+        .whereType<Map<Object?, Object?>>()
+        .map(
+          (Map<Object?, Object?> item) =>
+              ProjectFile.fromJson(item.cast<String, dynamic>()),
+        )
         .where((ProjectFile item) => item.id.isNotEmpty)
         .toList(growable: false);
   }
 
-  Future<Uint8List> projectFileBytes(
-    String projectId,
-    String fileId,
-  ) async {
+  Future<Uint8List> projectFileBytes(String projectId, String fileId) async {
     final response = await _http.get(
       _uri(
         '/v1/projects/${Uri.encodeComponent(projectId)}'
         '/files/${Uri.encodeComponent(fileId)}/download',
         const <String, String>{'inline': '1'},
       ),
-      headers: <String, String>{
-        ..._headers,
-        'Accept': '*/*',
-      },
+      headers: <String, String>{..._headers, 'Accept': '*/*'},
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _error(response.statusCode, response.body);
@@ -230,7 +229,10 @@ class ParityActionsApi {
   ) async {
     final response = await _http.post(
       _uri(path),
-      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
+      headers: <String, String>{
+        ..._headers,
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode(body),
     );
     return _decodeResponse(response);
@@ -242,7 +244,10 @@ class ParityActionsApi {
   ) async {
     final response = await _http.patch(
       _uri(path),
-      headers: <String, String>{..._headers, 'Content-Type': 'application/json'},
+      headers: <String, String>{
+        ..._headers,
+        'Content-Type': 'application/json',
+      },
       body: jsonEncode(body),
     );
     return _decodeResponse(response);

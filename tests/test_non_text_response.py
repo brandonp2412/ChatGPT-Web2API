@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import (
+from sloppa.cdp_driver import (
     CDPDriver,
 )
-from chatgpt_web2api.turn_anchor import TurnEndResult, TurnTextResult
+from sloppa.turn_anchor import TurnEndResult, TurnTextResult
 
 
 def _make_driver():
@@ -36,12 +36,12 @@ async def test_image_response_does_not_stall(monkeypatch):
     generation is allowed the full timeout, then breaks on done."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     state = {"phase1_polls": 0, "phase2_polls": 0}
 
@@ -97,12 +97,12 @@ async def test_text_response_streams_delta_unchanged(monkeypatch):
     deltas exactly as before (no regression from the broadened signals)."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     state = {"phase1": 0, "phase2": 0, "text": ""}
 
@@ -157,12 +157,12 @@ async def test_placeholder_on_empty_fetch_with_non_text_content(monkeypatch):
     placeholder message."""
     d = _make_driver()
     t = [0.0]
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.time.monotonic", lambda: t[0])
+    monkeypatch.setattr("sloppa.cdp_driver.time.monotonic", lambda: t[0])
 
     async def fast_sleep(s):
         t[0] += s
 
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", fast_sleep)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", fast_sleep)
 
     state = {"phase1": 0, "phase2": 0}
 

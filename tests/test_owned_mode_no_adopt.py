@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
+from sloppa.cdp_driver import CDPDriver
 
 
 def _make_driver(tab_mode="owned", parallel_tabs=False):
@@ -62,7 +62,7 @@ async def test_connect_adopt_mode_still_falls_back():
 
     # Should fall back to _find_page_ws, not raise
     # Need to mock the websocket connect too
-    with patch("chatgpt_web2api.cdp_driver.websockets.connect") as mock_ws:
+    with patch("sloppa.cdp_driver.websockets.connect") as mock_ws:
         mock_ws.return_value = MagicMock()
         try:
             await driver.connect()
@@ -110,7 +110,7 @@ async def test_reconnect_owned_mode_creates_new_tab_when_old_gone():
     # _find_owned_tab_ws returns None (tab gone)
     driver._create_owned_tab = AsyncMock(return_value="ws://new-tab")
 
-    with patch("chatgpt_web2api.cdp_driver.websockets.connect") as mock_ws:
+    with patch("sloppa.cdp_driver.websockets.connect") as mock_ws:
         mock_ws.return_value = MagicMock()
         try:
             await driver.reconnect()

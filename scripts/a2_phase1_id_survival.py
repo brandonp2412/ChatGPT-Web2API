@@ -1,6 +1,10 @@
 """Phase 1 verdict: does the client-generated message UUID from the
 /backend-api/f/conversation POST body survive into the backend mapping?"""
-import asyncio, json, urllib.request, websockets
+import asyncio
+import json
+import urllib.request
+
+import websockets
 
 CDP = 9222
 CONV = "6a48625b-34a4-83ed-93ba-a7153c2e6295"
@@ -109,9 +113,9 @@ async def main():
             print("VERDICT: STRONG SUCCESS — user node's message.id == client UUID.")
             print("A2 can correlate the user turn by observed client UUID directly.")
         else:
-            print(f"  No USER node has message.id == CLIENT_MSG_ID.")
-            print(f"  The client UUID appears as a parent_message_id / linkage field,")
-            print(f"  NOT as a user node's primary id.")
+            print("  No USER node has message.id == CLIENT_MSG_ID.")
+            print("  The client UUID appears as a parent_message_id / linkage field,")
+            print("  NOT as a user node's primary id.")
             print()
             print("VERDICT: PARTIAL SUCCESS — client UUID survives as a linkage reference")
             print("(parent_message_id of the assistant response), not as the user node's id.")

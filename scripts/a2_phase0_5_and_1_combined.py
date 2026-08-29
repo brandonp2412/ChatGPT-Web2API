@@ -120,7 +120,7 @@ async def main(num_samples: int) -> None:
             while True:
                 try:
                     _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             # Fire send in background; collect Network events meanwhile.
@@ -138,7 +138,7 @@ async def main(num_samples: int) -> None:
                         break
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if send_task.done() and time.time() > t_pre_wall + 8:
                         break
                     continue

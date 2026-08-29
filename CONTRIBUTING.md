@@ -1,26 +1,26 @@
-# Contributing to ChatGPT-Web2API
+# Contributing to Sloppa
 
 Thanks for your interest! This project is a CDP-driven reverse proxy for ChatGPT's web interface, and contributions are welcome.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/Elephant-Rock-Lab/ChatGPT-Web2API.git
-cd ChatGPT-Web2API
+git clone https://github.com/Elephant-Rock-Lab/Sloppa.git
+cd Sloppa
 pip install -e ".[dev]"
 ```
 
 ## Development Setup
 
 1. **Chrome + ChatGPT**: You need a ChatGPT Plus account and Chrome installed locally.
-2. **Run the proxy**: `chatgpt-web2api` — logs in on first run, starts API server.
+2. **Run the proxy**: `sloppa` — logs in on first run, starts API server.
 3. **Test**: `pytest` (unit tests) or manual `curl` against `localhost:8080`.
 
 ## How to Contribute
 
 ### Bug Reports
 
-Open an [issue](https://github.com/Elephant-Rock-Lab/ChatGPT-Web2API/issues) with:
+Open an [issue](https://github.com/Elephant-Rock-Lab/Sloppa/issues) with:
 - What you expected
 - What happened instead
 - Steps to reproduce (Chrome version, OS, ChatGPT account type)
@@ -45,7 +45,7 @@ Open an [issue](https://github.com/Elephant-Rock-Lab/ChatGPT-Web2API/issues) wit
 ## Architecture
 
 ```
-src/chatgpt_web2api/
+src/sloppa/
   __main__.py     CLI entrypoint
   config.py       Configuration from file/env/CLI
   chrome.py       Chrome subprocess lifecycle

@@ -18,7 +18,7 @@
   
   <!-- Title -->
   <text x="80" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700" fill="#ffffff">
-    ChatGPT-Web2API
+    Sloppa
   </text>
   
   <!-- Subtitle -->
@@ -42,7 +42,7 @@
   <!-- Install command -->
   <rect x="80" y="450" width="360" height="50" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
   <text x="100" y="482" font-family="SF Mono, Consolas, monospace" font-size="20" fill="#10b981">$</text>
-  <text x="125" y="482" font-family="SF Mono, Consolas, monospace" font-size="20" fill="#e2e8f0">pip install chatgpt-web2api</text>
+  <text x="125" y="482" font-family="SF Mono, Consolas, monospace" font-size="20" fill="#e2e8f0">pip install sloppa</text>
 
   <!-- Stats -->
   <text x="80" y="560" font-family="system-ui, sans-serif" font-size="18" fill="#64748b">MIT License  •  Python 3.11+  •  29 Tests  •  3 OS CI</text>

@@ -7,7 +7,7 @@ including the access-gating logic, not just the driver in isolation.
 It creates real conversations (registered for cleanup) but only reads +
 chats; no destructive ops here (those are in test_e2e_destructive.py).
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_mcp.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_mcp.py -m e2e -v
 """
 
 import asyncio
@@ -15,8 +15,8 @@ import asyncio
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-import chatgpt_web2api.mcp_server as mod
-from chatgpt_web2api.cdp_driver import CDPDriver
+import sloppa.mcp_server as mod
+from sloppa.cdp_driver import CDPDriver
 
 pytestmark = pytest.mark.e2e
 
@@ -41,7 +41,7 @@ async def test_mcp_client_lists_tools_over_live_stack(e2e_driver: CDPDriver):
         # Safe reads + core chat are visible by default
         assert "list_models" in names
         assert "chat_completion" in names
-        # Destructive tools must be hidden without W2A_ENABLE_DESTRUCTIVE
+        # Destructive tools must be hidden without SLOPPA_ENABLE_DESTRUCTIVE
         assert "delete_memory" not in names
     finally:
         await ctx.__aexit__(None, None, None)
@@ -75,7 +75,7 @@ async def test_mcp_client_chats_live(
         await session.initialize()
         result = await session.call_tool(
             "chat_completion",
-            {"message": "Reply with exactly this token: W2A-E2E-MCP-OK"},
+            {"message": "Reply with exactly this token: SLOPPA-E2E-MCP-OK"},
         )
         assert result.isError is not True
         # chat_completion returns (TextContent, structuredContent); the
@@ -84,7 +84,7 @@ async def test_mcp_client_chats_live(
         cid = data.get("conversation_id", "")
         if cid:
             e2e_created["conversations"].add(cid)
-        assert "W2A-E2E-MCP-OK" in str(data.get("content", "")), \
+        assert "SLOPPA-E2E-MCP-OK" in str(data.get("content", "")), \
             f"marker missing from structured content: {data}"
     finally:
         await ctx.__aexit__(None, None, None)

@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.mcp_driver_pool import (
+from sloppa.config import Config
+from sloppa.mcp_driver_pool import (
     McpSessionDriverPool,
     PoolExhaustedError,
 )

@@ -34,7 +34,8 @@ async def main(listen_seconds: int) -> None:
     )
     page = next((t for t in targets if t.get("type") == "page" and "chatgpt.com" in t.get("url", "")), None)
     if not page:
-        print("ERROR: no chatgpt page", file=sys.stderr); return
+        print("ERROR: no chatgpt page", file=sys.stderr)
+        return
     ws_url = page["webSocketDebuggerUrl"]
     print(f"[v4] page ws: {ws_url}", flush=True)
 
@@ -61,7 +62,7 @@ async def main(listen_seconds: int) -> None:
                 if r.get("id") == wait_id:
                     body = r.get("result", {}).get("body", "")
                     return body
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
         return "(getResponseBody timed out)"
 
@@ -85,7 +86,7 @@ async def main(listen_seconds: int) -> None:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 evt = json.loads(raw)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             # Skip command responses we issued (handled inline by get_resp_body)
             if "id" in evt and "method" not in evt:
@@ -129,7 +130,7 @@ async def main(listen_seconds: int) -> None:
                 await ws.send(json.dumps({"id": mid, "method": "Fetch.continueResponse",
                                           "params": {"requestId": rid}}))
 
-    print(f"\n[v4] done.", flush=True)
+    print("\n[v4] done.", flush=True)
 
 
 if __name__ == "__main__":

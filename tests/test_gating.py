@@ -2,8 +2,8 @@
 
 Mirrors the hermes-gpt graduated-access model:
   - Safe reads + core chat visible by default
-  - Write/mutating tools hidden unless W2A_ENABLE_WRITE=1
-  - Destructive tools hidden unless W2A_ENABLE_DESTRUCTIVE=1
+  - Write/mutating tools hidden unless SLOPPA_ENABLE_WRITE=1
+  - Destructive tools hidden unless SLOPPA_ENABLE_DESTRUCTIVE=1
   - Hidden tools refuse to execute even if called directly
   - Every tool advertises honest auth metadata
   - Non-loopback binding warns the operator
@@ -11,7 +11,7 @@ Mirrors the hermes-gpt graduated-access model:
 
 import pytest
 
-from chatgpt_web2api.mcp_server import (
+from sloppa.mcp_server import (
     DESTRUCTIVE_ENV,
     NOAUTH_META,
     WRITE_ENV,
@@ -85,7 +85,7 @@ def test_default_surface_exact_name_set(monkeypatch):
 # ── Write gate ────────────────────────────────────────────────
 
 def test_write_env_exposes_mutating_tools(monkeypatch):
-    """W2A_ENABLE_WRITE=1 surfaces project/memory/archive mutation tools."""
+    """SLOPPA_ENABLE_WRITE=1 surfaces project/memory/archive mutation tools."""
     clear_gate_envs(monkeypatch)
     monkeypatch.setenv(WRITE_ENV, "1")
     visible = names_of(build_tools())
@@ -104,7 +104,7 @@ def test_write_env_exposes_mutating_tools(monkeypatch):
 # ── Destructive gate ──────────────────────────────────────────
 
 def test_destructive_env_exposes_delete_tools(monkeypatch):
-    """W2A_ENABLE_DESTRUCTIVE=1 surfaces the two irreversible delete tools."""
+    """SLOPPA_ENABLE_DESTRUCTIVE=1 surfaces the two irreversible delete tools."""
     clear_gate_envs(monkeypatch)
     monkeypatch.setenv(DESTRUCTIVE_ENV, "1")
     visible = names_of(build_tools())
@@ -134,7 +134,7 @@ async def test_hidden_tool_refuses_to_run(monkeypatch):
     it appearing in list_tools — the call must still be refused.
     """
     clear_gate_envs(monkeypatch)
-    import chatgpt_web2api.mcp_server as mod
+    import sloppa.mcp_server as mod
     monkeypatch.setattr(mod, "_driver", object())  # truthy: passes the driver check
     monkeypatch.setattr(mod, "_config", None)
     monkeypatch.setattr(mod, "_lock_cdp_port", None)
@@ -159,7 +159,7 @@ async def test_visible_tool_is_not_blocked(monkeypatch):
     clear_gate_envs(monkeypatch)
     from unittest.mock import AsyncMock, MagicMock
 
-    import chatgpt_web2api.mcp_server as mod
+    import sloppa.mcp_server as mod
 
     driver = MagicMock()
     driver.get_models = AsyncMock(return_value=[{"slug": "auto", "title": "Auto"}])
@@ -213,9 +213,9 @@ def test_warn_non_loopback_emits_when_exposed(caplog):
     """Binding a no-auth server off loopback must log a warning."""
     import logging
 
-    from chatgpt_web2api.mcp_server import warn_non_loopback
+    from sloppa.mcp_server import warn_non_loopback
 
-    with caplog.at_level(logging.WARNING, logger="chatgpt_web2api.mcp_server"):
+    with caplog.at_level(logging.WARNING, logger="sloppa.mcp_server"):
         warn_non_loopback("0.0.0.0", "sse")
 
     assert any("0.0.0.0" in r.message and "no authentication" in r.message
@@ -226,9 +226,9 @@ def test_warn_non_loopback_silent_on_loopback(caplog):
     """Loopback binding must not warn."""
     import logging
 
-    from chatgpt_web2api.mcp_server import warn_non_loopback
+    from sloppa.mcp_server import warn_non_loopback
 
-    with caplog.at_level(logging.WARNING, logger="chatgpt_web2api.mcp_server"):
+    with caplog.at_level(logging.WARNING, logger="sloppa.mcp_server"):
         warn_non_loopback("127.0.0.1", "sse")
 
     assert not any("no authentication" in r.message for r in caplog.records)
@@ -238,14 +238,14 @@ def test_warn_non_loopback_respects_api_keys(caplog, monkeypatch):
     """When api_keys are configured, the no-auth warning is suppressed."""
     import logging
 
-    from chatgpt_web2api.config import Config
-    from chatgpt_web2api.mcp_server import warn_non_loopback
+    from sloppa.config import Config
+    from sloppa.mcp_server import warn_non_loopback
 
     cfg = Config.load(None)
     cfg.server.api_keys = ["sk-test"]
-    monkeypatch.setattr("chatgpt_web2api.mcp_server._config", cfg)
+    monkeypatch.setattr("sloppa.mcp_server._config", cfg)
 
-    with caplog.at_level(logging.WARNING, logger="chatgpt_web2api.mcp_server"):
+    with caplog.at_level(logging.WARNING, logger="sloppa.mcp_server"):
         warn_non_loopback("0.0.0.0", "sse")
 
     assert not any("no authentication" in r.message for r in caplog.records)

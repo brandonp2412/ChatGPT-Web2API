@@ -12,7 +12,12 @@ capture (Fetch.enable + Fetch.requestPaused). That lets us pause the actual
 network request and read its body before letting it proceed. This script
 tests the CDP Fetch API approach.
 """
-import asyncio, json, urllib.request, time, websockets
+import asyncio
+import json
+import time
+import urllib.request
+
+import websockets
 
 CDP = 9222
 BRIDGE = "http://127.0.0.1:8080"
@@ -53,7 +58,7 @@ async def main():
                 print(f"  raw[:600]: {captured[:600]}")
             return
         else:
-            print(f"  no /f/conversation POST paused on this target")
+            print("  no /f/conversation POST paused on this target")
 
     print("\nVERDICT: CDP Fetch.pause did not intercept the send on any target.")
     print("The send may go through a service worker, or the bridge's target was not in the list.")
@@ -65,7 +70,8 @@ async def try_fetch_pause_on_target(ws_url: str, marker: str) -> str | None:
     async with websockets.connect(ws_url, max_size=None, close_timeout=5) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         # Enable Fetch with a URL pattern filter for the send endpoint.
         # stages: Request — pause at request stage so we can read postData.
@@ -107,7 +113,7 @@ async def try_fetch_pause_on_target(ws_url: str, marker: str) -> str | None:
         while time.time() < deadline:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if send_task.done():
                     break
                 continue
@@ -155,8 +161,8 @@ async def try_fetch_pause_on_target(ws_url: str, marker: str) -> str | None:
         try:
             content = await asyncio.wait_for(send_task, timeout=60)
             print(f"  bridge returned: {content}")
-        except asyncio.TimeoutError:
-            print(f"  bridge send timed out after Fetch pause")
+        except TimeoutError:
+            print("  bridge send timed out after Fetch pause")
 
         return captured_body
 

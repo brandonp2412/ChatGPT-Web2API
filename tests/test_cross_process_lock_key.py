@@ -14,7 +14,7 @@ import tempfile
 import portalocker
 import pytest
 
-from chatgpt_web2api.cross_process_lock import (
+from sloppa.cross_process_lock import (
     CrossProcessLock,
     LockAcquisitionError,
     _validate_lock_key,

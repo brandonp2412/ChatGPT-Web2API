@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_transport import CDPTransport
+from sloppa.cdp_transport import CDPTransport
 
 
 class FakeWebSocket:
@@ -227,7 +227,7 @@ async def test_js_with_data_injects_data_as___D():
 
 @pytest.mark.asyncio
 async def test_js_strict_raises_cdp_error_on_error_blob():
-    from chatgpt_web2api.cdp_driver import CDPJSError
+    from sloppa.cdp_driver import CDPJSError
 
     transport, driver = _make_transport()
 
@@ -273,7 +273,7 @@ def test_transport_holds_no_socket_state():
 
 def test_driver_wires_cdp_transport():
     """CDPDriver.__init__ constructs a CDPTransport and delegates through it."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     assert isinstance(d._transport, CDPTransport)
@@ -284,7 +284,7 @@ def test_driver_delegators_preserve_signatures():
     """All 7 moved methods remain callable on the driver (delegators), so
     internal call sites and test stubs that patch driver._js / driver._cdp
     etc. keep working unchanged."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     for name in (

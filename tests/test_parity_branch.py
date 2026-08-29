@@ -1,7 +1,7 @@
 import pytest
 
-from chatgpt_web2api.parity_branch import branch_switch_plan
-from chatgpt_web2api.parity_browser import ParityBrowserError
+from sloppa.parity_branch import branch_switch_plan
+from sloppa.parity_browser import ParityBrowserError
 
 
 def _mapping():

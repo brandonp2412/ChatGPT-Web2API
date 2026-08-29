@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.parity_browser import ParityBrowserError
-from chatgpt_web2api.parity_current_controls import (
+from sloppa.parity_browser import ParityBrowserError
+from sloppa.parity_current_controls import (
     LibraryController,
     ReasoningController,
     UIActionController,
@@ -30,7 +30,7 @@ async def test_reasoning_controller_maps_extra_high_to_visible_picker_label(monk
         return_value='{"ok":true,"label":"extra high"}'
     )
     monkeypatch.setattr(
-        "chatgpt_web2api.parity_current_controls.asyncio.sleep", AsyncMock()
+        "sloppa.parity_current_controls.asyncio.sleep", AsyncMock()
     )
     controller = ReasoningController(driver)
 
@@ -66,7 +66,7 @@ async def test_library_controller_selects_requested_files(monkeypatch):
     driver = MagicMock()
     driver._js_with_data_strict = AsyncMock(return_value='{"ok":true}')
     monkeypatch.setattr(
-        "chatgpt_web2api.parity_current_controls.asyncio.sleep", AsyncMock()
+        "sloppa.parity_current_controls.asyncio.sleep", AsyncMock()
     )
     controller = LibraryController(driver)
 

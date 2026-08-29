@@ -10,7 +10,7 @@ The fixture runs on a non-8090 port (default 18090) so it never contends with
 an operational SSE server. ``chat_completion`` over SSE here is also the live
 regression test for issue #10/#11 (the SSE completion deadlock fix).
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_sse.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_sse.py -m e2e -v
 """
 
 import json
@@ -64,7 +64,7 @@ async def test_sse_list_tools(e2e_sse_server: str):
             names = {t.name for t in resp.tools}
             assert "list_models" in names
             assert "chat_completion" in names
-            # Destructive tools hidden without W2A_ENABLE_DESTRUCTIVE
+            # Destructive tools hidden without SLOPPA_ENABLE_DESTRUCTIVE
             assert "delete_memory" not in names
 
 
@@ -94,7 +94,7 @@ async def test_sse_chat_completion(e2e_sse_server: str, e2e_created: dict):
     deadlock that timed out at 120s before the conv_id resolution fix. It must
     complete in seconds, not time out.
     """
-    marker = "W2A-E2E-SSE-CHAT-OK"
+    marker = "SLOPPA-E2E-SSE-CHAT-OK"
     async with sse_client(e2e_sse_server) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()

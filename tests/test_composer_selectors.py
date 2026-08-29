@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import (
+from sloppa.cdp_driver import (
     COMPOSER_FALLBACK_SELECTOR,
     COMPOSER_SELECTOR,
     SEND_BUTTON_FALLBACK_SELECTOR,
@@ -192,7 +192,7 @@ async def test_type_message_raises_when_verify_returns_empty(monkeypatch):
     d._js_strict = AsyncMock(return_value="")  # empty → verify fails
     d._detect_select_all_modifier = AsyncMock(return_value=2)
     # Collapse sleeps so the retry path runs instantly.
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     with pytest.raises(RuntimeError, match="verification failed after retry"):
         await d.type_message("hello")
@@ -213,7 +213,7 @@ async def test_click_send_fails_when_no_send_button(monkeypatch):
     # The wait-for-button loop also returns 'no', so it polls all 10
     # times then falls through. Patch asyncio.sleep to no-op so it's
     # instant.
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     with pytest.raises(RuntimeError, match="Send failed: no send button"):
         await d.click_send()
@@ -226,13 +226,14 @@ async def test_click_send_emits_new_selector_first(monkeypatch):
     testid fallback — mirroring the new composer's DOM."""
     d = _make_driver()
     seen = []
+    d._cdp = AsyncMock()
 
     async def _fake_js(expr, timeout=15):
         seen.append(expr)
         # Wait-loop returns 'yes' immediately, then the click returns 'sent'.
         return "yes" if "yes" in expr or "'no'" in expr else "sent"
     d._js = _fake_js
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     await d.click_send()
 
@@ -245,11 +246,43 @@ async def test_click_send_emits_new_selector_first(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_click_send_uses_native_button_activation(monkeypatch):
+    """The current ChatGPT SPA requires native button activation for React."""
+    d = _make_driver()
+    d._cdp = AsyncMock()
+    seen = []
+
+    async def _fake_js(expr, timeout=15):
+        seen.append(expr)
+        if "getBoundingClientRect" in expr:
+            return '{"x": 10, "y": 20}'
+        return "yes"
+
+    d._js = _fake_js
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
+
+    await d.click_send()
+
+    send_expr = next(e for e in seen if "getBoundingClientRect" in e)
+    assert "getBoundingClientRect" in send_expr
+    assert any(
+        call.args[0] == "Input.dispatchMouseEvent"
+        and call.args[1]["type"] == "mousePressed"
+        for call in d._cdp.await_args_list
+    )
+    assert any(
+        call.args[0] == "Input.dispatchMouseEvent"
+        and call.args[1]["type"] == "mouseReleased"
+        for call in d._cdp.await_args_list
+    )
+
+
+@pytest.mark.asyncio
 async def test_click_send_sent_on_success(monkeypatch):
     """Happy path: button present + click dispatched → 'sent' logged, no raise."""
     d = _make_driver()
-    d._js = AsyncMock(return_value="sent")
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    d._js = AsyncMock(side_effect=["yes", "sent"])
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     # Should not raise.
     await d.click_send()
@@ -272,11 +305,13 @@ async def test_navigate_new_chat_ready_when_prosemirror_present(monkeypatch):
 
     async def _fake_js(expr, timeout=15):
         # Confirm the readiness expression references the new composer.
+        if "a[href=\"/\"]" in expr:
+            return '{"x": 10, "y": 20}'
         assert COMPOSER_SELECTOR in expr, \
             "readiness check does not query the new composer selector"
         return ready_returned["v"]
     d._js = _fake_js
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     await d.navigate_new_chat()  # must not raise / must not loop forever
 
@@ -301,7 +336,7 @@ async def test_type_message_retries_on_stale_text_then_succeeds(monkeypatch):
         # sequence. The platform probe is bypassed via _detect_select_all_modifier.
         return verify_returns.pop(0) if verify_returns else ""
     d._js_strict = _fake_strict
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     await d.type_message("correct input")  # must not raise
 
@@ -441,7 +476,7 @@ async def test_refresh_token_preserves_prior_on_transient_empty(monkeypatch):
     d._token_fetched_at = 1000.0
     # _js returns an empty-token payload on all 3 attempts.
     d._js = AsyncMock(return_value='{"token": "", "user": ""}')
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", AsyncMock())
 
     with pytest.raises(RuntimeError):
         await d._refresh_token()

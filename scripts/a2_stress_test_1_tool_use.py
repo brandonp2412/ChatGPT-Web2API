@@ -71,7 +71,7 @@ async def main():
             while True:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=0.5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 r = json.loads(raw)
                 m = r.get("method", "")
@@ -148,7 +148,7 @@ async def main():
                                            "parent_message_id", "model", "timezone",
                                            "timezone_offset_min")}
                 if top_extras:
-                    print(f"\ntop-level EXTRA fields (vs plain-text shape):")
+                    print("\ntop-level EXTRA fields (vs plain-text shape):")
                     for k, v in top_extras.items():
                         print(f"  {k}: {str(v)[:120]}")
                 else:

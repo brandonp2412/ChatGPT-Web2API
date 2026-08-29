@@ -23,7 +23,7 @@ async def test_js_with_data_does_not_declare_global___D():
     The expression must instead wrap the declaration in a function scope
     (IIFE) so __D is local.
     """
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
     driver = CDPDriver(cdp_port=9222)
     captured = {}
     async def fake_js(expr, timeout=15):
@@ -58,7 +58,7 @@ async def test_js_with_data_still_passes_data_through():
     read it. We assert the serialized data appears inside the expression
     and the body text is preserved.
     """
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
     driver = CDPDriver(cdp_port=9222)
     captured = {}
     async def fake_js(expr, timeout=15):
@@ -79,7 +79,7 @@ async def test_js_with_data_still_passes_data_through():
 @pytest.mark.asyncio
 async def test_js_with_data_returns_driver_value():
     """The return value of _js_with_data is whatever _js returns."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
     driver = CDPDriver(cdp_port=9222)
     async def fake_js(expr, timeout=15):
         return "RESULT"

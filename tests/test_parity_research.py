@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.parity_research import (
+from sloppa.parity_research import (
     RichConversationController,
     extract_research_reports,
 )

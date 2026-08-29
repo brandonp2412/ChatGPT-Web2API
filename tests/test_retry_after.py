@@ -9,7 +9,7 @@ MCP structured result) can report it.
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import RateLimitError, parse_retry_after
+from sloppa.cdp_driver import RateLimitError, parse_retry_after
 
 # ── parse_retry_after ─────────────────────────────────────────
 

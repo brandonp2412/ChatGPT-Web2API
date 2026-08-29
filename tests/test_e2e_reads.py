@@ -4,14 +4,14 @@ Zero account risk — every operation here is a GET. These establish that the
 driver↔ChatGPT boundary works for all read tools, which is exactly what the
 mocked unit tests cannot verify (and where the _js_with_data bug hid).
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_reads.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_reads.py -m e2e -v
 """
 
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.mcp_server import (
+from sloppa.cdp_driver import CDPDriver
+from sloppa.mcp_server import (
     do_get_conversation,
     do_list_conversations,
     do_list_gpts,

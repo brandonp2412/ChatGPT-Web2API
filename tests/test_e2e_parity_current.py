@@ -1,7 +1,7 @@
 """Read-only live canaries for current ChatGPT chat-window parity.
 
 Run with:
-    W2A_E2E_RUN=1 pytest tests/test_e2e_parity_current.py -m e2e -v
+    SLOPPA_E2E_RUN=1 pytest tests/test_e2e_parity_current.py -m e2e -v
 
 These tests only open/dismiss existing ChatGPT controls. They do not create,
 rename, archive, share, upload, send, or delete account data.
@@ -9,9 +9,9 @@ rename, archive, share, upload, send, or delete account data.
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
-from chatgpt_web2api.parity_browser import ParityBrowser
-from chatgpt_web2api.parity_current_controls import (
+from sloppa.cdp_driver import CDPDriver
+from sloppa.parity_browser import ParityBrowser
+from sloppa.parity_current_controls import (
     LibraryController,
     ReasoningController,
     UIActionController,

@@ -21,7 +21,6 @@ conversation. That's the only outward action.
 import asyncio
 import base64
 import json
-import sys
 import time
 import urllib.request
 
@@ -105,7 +104,7 @@ async def get_parent_message_id(ws_url: str, conv_id: str, token: str) -> str:
         for _ in range(60):
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=8)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             r = json.loads(raw)
             if r.get("id") == 1:
@@ -159,7 +158,8 @@ async def main():
         urllib.request.Request("http://127.0.0.1:9222/json/list"), timeout=5).read())
     page = next((t for t in targets if t.get("type") == "page" and "chatgpt.com" in t.get("url", "")), None)
     if not page:
-        print("ERROR: no chatgpt page"); return
+        print("ERROR: no chatgpt page")
+        return
     ws_url = page["webSocketDebuggerUrl"]
 
     print("\n[mint] getting fresh token from live session...")
@@ -167,7 +167,8 @@ async def main():
     print(f"[mint] token len: {len(token)}")
     print(f"[mint] user: {token[:20]}... (truncated)")
     if not token:
-        print("FATAL: no token"); return
+        print("FATAL: no token")
+        return
     # Decode JWT payload to confirm it's current
     try:
         payload_b64 = token.split(".")[1]
@@ -213,7 +214,7 @@ async def main():
     print("STAGE 2: RECONSTRUCT — build blob in Python, fresh timestamp")
     print("─" * 70)
     # Rebuild the same array but with current time
-    now_js = time.strftime("%a %b %d %Y %H:%M:%S GMT+0300 (Arabian Standard Time)", time.localtime())
+    time.strftime("%a %b %d %Y %H:%M:%S GMT+0300 (Arabian Standard Time)", time.localtime())
     # The decoded blob was a JSON-ish array; reconstruct minimally
     # Using the same values but fresh timestamp + fresh epoch ms
     arr = [
@@ -276,7 +277,8 @@ async def main():
         pass
     print(f"[3a] prepare_token: {bool(prepare_token)} ({str(prepare_token)[:40] if prepare_token else 'none'})")
     if not prepare_token:
-        print("[3] ABORT — no prepare_token"); return
+        print("[3] ABORT — no prepare_token")
+        return
 
     # 3b: finalize with the prepare_token (matches captured finalize body)
     fin_body = {"prepare_token": prepare_token}
@@ -296,7 +298,7 @@ async def main():
         fj_keys = list(json.loads(s3b_body).keys())
         print(f"[3b] finalize response keys: {fj_keys}")
     except Exception:
-        print(f"[3b] finalize response not JSON")
+        print("[3b] finalize response not JSON")
 
     # 3c: fetch parent_message_id
     print("\n[3c] fetching parent_message_id...")

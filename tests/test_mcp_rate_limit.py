@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import chatgpt_web2api.mcp_server as mod
-from chatgpt_web2api.cdp_driver import RateLimitError
+import sloppa.mcp_server as mod
+from sloppa.cdp_driver import RateLimitError
 
 
 def _make_server_with_raising_driver(raises: Exception | None):
@@ -36,7 +36,7 @@ def _make_server_with_raising_driver(raises: Exception | None):
     async def _stream(text, timeout=120, *, budgets=None, model=None):
         if raises is not None:
             raise raises
-        from chatgpt_web2api.cdp_driver import StreamChunk
+        from sloppa.cdp_driver import StreamChunk
         yield StreamChunk(delta="ok")
         yield StreamChunk(delta="", finish_reason="stop")
 
@@ -64,7 +64,7 @@ async def test_mcp_chat_persistent_rate_limit_returns_structured_error(monkeypat
     doesn't match any tool's success schema.
     """
     # Patch sleep so the (exhausted) retries don't make the test take minutes.
-    import chatgpt_web2api.resilience as res
+    import sloppa.resilience as res
     async def _noop(_s): return None
     monkeypatch.setattr(res.asyncio, "sleep", _noop)
 
@@ -96,7 +96,7 @@ async def test_mcp_chat_transient_rate_limit_retries_transparently(monkeypatch):
     First attempt throttled, second succeeds → client sees a normal (non-error)
     result, no rate-limited signal. This is the 'make workflows practical' win.
     """
-    import chatgpt_web2api.resilience as res
+    import sloppa.resilience as res
     async def _noop(_s): return None
     monkeypatch.setattr(res.asyncio, "sleep", _noop)
 
@@ -114,7 +114,7 @@ async def test_mcp_chat_transient_rate_limit_retries_transparently(monkeypatch):
         attempts["n"] += 1
         if attempts["n"] == 1:
             raise RateLimitError(retry_after=1)
-        from chatgpt_web2api.cdp_driver import StreamChunk
+        from sloppa.cdp_driver import StreamChunk
         yield StreamChunk(delta="recovered")
         yield StreamChunk(delta="", finish_reason="stop")
 

@@ -15,15 +15,15 @@ The real @diagnose-decorated method runs, hits the broken path, returns the
 broken shape, and the decorator captures it — exactly the production code path,
 just with a forced failure.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_doctor.py -m e2e -v
 """
 
 import json
 
 import pytest
 
-import chatgpt_web2api.diagnostics as dmod
-from chatgpt_web2api.cdp_driver import CDPDriver
+import sloppa.diagnostics as dmod
+from sloppa.cdp_driver import CDPDriver
 
 pytestmark = pytest.mark.e2e
 
@@ -80,7 +80,7 @@ async def test_doctor_auto_discovers_and_prints_broken_function(
     monkeypatch.setattr(type(e2e_driver), "_js_with_data_strict", _broken_js_with_data)
     await e2e_driver.get_projects()
 
-    from chatgpt_web2api.doctor import latest_artifact_for, list_broken_functions, print_evidence
+    from sloppa.doctor import latest_artifact_for, list_broken_functions, print_evidence
 
     fns = list_broken_functions(tmp_path)
     assert "get_projects" in fns

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""ZCode SessionStart hook wrapper for `chatgpt-web2api ensure`.
+"""ZCode SessionStart hook wrapper for `sloppa ensure`.
 
-Runs `chatgpt-web2api ensure` to reconcile the bridge (start REST + SSE if
+Runs `sloppa ensure` to reconcile the bridge (start REST + SSE if
 missing, verify health). ALWAYS exits 0 so a bridge failure never blocks the
 ZCode session — the bridge being down is an infrastructure problem, not a
 reason to prevent the user from working. Failures are logged to stderr where
@@ -20,10 +20,10 @@ import sys
 
 
 def main() -> None:
-    # Forward our args (minus the script name) to `chatgpt-web2api ensure`.
+    # Forward our args (minus the script name) to `sloppa ensure`.
     # The first arg is this script's path; the rest are ensure's flags.
     ensure_args = sys.argv[1:]
-    cmd = [sys.executable, "-m", "chatgpt_web2api", "ensure"] + ensure_args
+    cmd = [sys.executable, "-m", "sloppa", "ensure"] + ensure_args
 
     try:
         result = subprocess.run(

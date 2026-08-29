@@ -71,7 +71,8 @@ async def main():
                                   ping_interval=20, ping_timeout=60) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         # Get token.
         await ws.send(json.dumps({"id": nid(), "method": "Runtime.evaluate",
@@ -138,7 +139,6 @@ async def main():
     # Step 4: run the projection JS against the raw mapping (in Python —
     # simulate what the JS would produce).
     print("\nStep 4: Simulating projection against raw mapping...")
-    from chatgpt_web2api.backend_projection import CONVERSATION_PROJECTION_JS, TURN_PROJECTION_LIMIT
     projected = {}
     for key, node in mapping.items():
         msg = node.get("message") or {}
@@ -210,7 +210,7 @@ async def main():
 
     # Step 6: verify the selectors work on the projected fixture.
     print("\nStep 6: Verifying selectors work on the projected fixture...")
-    from chatgpt_web2api.turn_anchor import TurnAnchor, select_text_for_turn
+    from sloppa.turn_anchor import TurnAnchor, select_text_for_turn
     # Find the latest user node to use as the captured ID.
     latest_user_id = None
     latest_user_ct = -1

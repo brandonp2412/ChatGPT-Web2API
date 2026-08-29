@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.identity_listener import (
+from sloppa.identity_listener import (
     IdentityListener,
     hash_sent_text,
 )

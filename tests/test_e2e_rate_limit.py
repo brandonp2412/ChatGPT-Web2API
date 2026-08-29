@@ -10,7 +10,7 @@ Safety: the burst uses create-then-delete (registered in e2e_created); if the
 limit can't be tripped in a few tries, the test skips rather than hammering.
 If a limit persists (won't dismiss), the suite's RateLimitError hook skips it.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_rate_limit.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_rate_limit.py -m e2e -v
 """
 
 import asyncio
@@ -18,9 +18,9 @@ import json
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, RateLimitError, is_rate_limited_text
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.mcp_server import do_chat_completion
+from sloppa.cdp_driver import CDPDriver, RateLimitError, is_rate_limited_text
+from sloppa.config import Config
+from sloppa.mcp_server import do_chat_completion
 
 pytestmark = pytest.mark.e2e
 

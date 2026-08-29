@@ -4,19 +4,19 @@ import json
 
 import pytest
 
-from chatgpt_web2api.config import Config
-from chatgpt_web2api.service import Service
+from sloppa.config import Config
+from sloppa.service import Service
 
 # ── A1: config auto-discovery ─────────────────────────────────────────
 
 def test_config_auto_loads_default_when_no_path(tmp_path, monkeypatch):
-    """A1: when --config is omitted and ~/.chatgpt-web2api/config.json exists,
+    """A1: when --config is omitted and ~/.sloppa/config.json exists,
     it's loaded (the docs tell users to create it; the old code ignored it)."""
     # Point HOME/USERPROFILE at tmp_path so Path.home() finds our fake config
     # on both Unix (HOME) and Windows (USERPROFILE).
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    cfg_dir = tmp_path / ".chatgpt_web2api"
+    cfg_dir = tmp_path / ".sloppa"
     cfg_dir.mkdir()
     (cfg_dir / "config.json").write_text(json.dumps({
         "port": 9999, "api_keys": ["secret-key"],
@@ -40,7 +40,7 @@ def test_config_explicit_path_overrides_default(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     # Both a default file AND an explicit file exist.
-    cfg_dir = tmp_path / ".chatgpt_web2api"
+    cfg_dir = tmp_path / ".sloppa"
     cfg_dir.mkdir()
     (cfg_dir / "config.json").write_text(json.dumps({"port": 7777}))
     explicit = tmp_path / "explicit.json"
@@ -54,7 +54,7 @@ def test_config_malformed_default_does_not_crash(tmp_path, monkeypatch):
     to built-in defaults rather than preventing startup."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    cfg_dir = tmp_path / ".chatgpt_web2api"
+    cfg_dir = tmp_path / ".sloppa"
     cfg_dir.mkdir()
     (cfg_dir / "config.json").write_text("{ not valid json")
     cfg = Config.load(None)
@@ -87,15 +87,15 @@ def test_bind_safety_remote_with_keys_allows(monkeypatch):
 def test_bind_safety_remote_no_keys_fails(monkeypatch):
     """Non-loopback + no keys + no override → RuntimeError at startup. This is
     the fail-safe: never silently expose an unauthenticated API to the network."""
-    monkeypatch.delenv("W2A_ALLOW_UNAUTH_REMOTE", raising=False)
+    monkeypatch.delenv("SLOPPA_ALLOW_UNAUTH_REMOTE", raising=False)
     cfg = _make_cfg_with_host("0.0.0.0")
-    with pytest.raises(RuntimeError, match="W2A_ALLOW_UNAUTH_REMOTE"):
+    with pytest.raises(RuntimeError, match="SLOPPA_ALLOW_UNAUTH_REMOTE"):
         Service._check_bind_safety(cfg)
 
 
 def test_bind_safety_remote_no_keys_override_allows(monkeypatch):
-    """Non-loopback + no keys + W2A_ALLOW_UNAUTH_REMOTE=1 → allowed (with warning)."""
-    monkeypatch.setenv("W2A_ALLOW_UNAUTH_REMOTE", "1")
+    """Non-loopback + no keys + SLOPPA_ALLOW_UNAUTH_REMOTE=1 → allowed (with warning)."""
+    monkeypatch.setenv("SLOPPA_ALLOW_UNAUTH_REMOTE", "1")
     cfg = _make_cfg_with_host("0.0.0.0")
     Service._check_bind_safety(cfg)  # must not raise
 
@@ -108,14 +108,14 @@ def test_bind_safety_localhost_treated_as_loopback():
 
 
 def test_bind_safety_error_names_the_override():
-    """The error message must name W2A_ALLOW_UNAUTH_REMOTE so a user who hits
+    """The error message must name SLOPPA_ALLOW_UNAUTH_REMOTE so a user who hits
     it knows the escape hatch without reading docs."""
     cfg = _make_cfg_with_host("0.0.0.0")
     try:
         Service._check_bind_safety(cfg)
         pytest.fail("should have raised")
     except RuntimeError as e:
-        assert "W2A_ALLOW_UNAUTH_REMOTE" in str(e)
+        assert "SLOPPA_ALLOW_UNAUTH_REMOTE" in str(e)
 
 
 # ── A3: ensure config tunables (PR3) ───────────────────────────────────
@@ -148,11 +148,11 @@ def test_ensure_config_loaded_from_file(tmp_path, monkeypatch):
 
 
 def test_ensure_config_env_overrides(monkeypatch, tmp_path):
-    """W2A_ENSURE_* env vars override config + defaults."""
+    """SLOPPA_ENSURE_* env vars override config + defaults."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setenv("W2A_ENSURE_DEGRADED_POLL_BUDGET_S", "9.0")
-    monkeypatch.setenv("W2A_ENSURE_BREAKER_COOLDOWN_GRACE_S", "2.0")
+    monkeypatch.setenv("SLOPPA_ENSURE_DEGRADED_POLL_BUDGET_S", "9.0")
+    monkeypatch.setenv("SLOPPA_ENSURE_BREAKER_COOLDOWN_GRACE_S", "2.0")
     cfg = Config.load(None)
     assert cfg.ensure.degraded_poll_budget_s == 9.0
     assert cfg.ensure.breaker_cooldown_grace_s == 2.0

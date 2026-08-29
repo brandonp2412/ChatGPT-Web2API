@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.parity_projects import ProjectController
+from sloppa.parity_projects import ProjectController
 
 
 @pytest.mark.asyncio

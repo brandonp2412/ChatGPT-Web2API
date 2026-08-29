@@ -8,7 +8,7 @@ failure surfaces immediately and clearly instead.
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import (
+from sloppa.cdp_driver import (
     RateLimitError,
     is_rate_limited_text,
 )

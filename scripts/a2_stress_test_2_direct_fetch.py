@@ -43,7 +43,8 @@ async def main():
     async with websockets.connect(ws_url, max_size=None) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         # Enable Network with maxPostDataSize=4MB (what A2 would use)
         await ws.send(json.dumps({"id": nid(), "method": "Network.enable",
@@ -72,7 +73,7 @@ async def main():
             while True:
                 try:
                     _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             # Inject fetch via the page — fire and forget; we capture it via Network events
@@ -94,7 +95,7 @@ async def main():
             while asyncio.get_event_loop().time() < deadline:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 r = json.loads(raw)
                 if r.get("method") == "Network.requestWillBeSent":

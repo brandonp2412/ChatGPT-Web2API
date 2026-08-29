@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from chatgpt_web2api.session_key import current_mcp_session_key
+from sloppa.session_key import current_mcp_session_key
 
 
 def _make_server_with_session_id(session_id: str | None) -> MagicMock:

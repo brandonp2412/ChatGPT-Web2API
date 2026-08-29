@@ -31,13 +31,13 @@ async def main(listen_seconds: int) -> None:
     )
     page = next((t for t in targets if t.get("type") == "page" and "chatgpt.com" in t.get("url", "")), None)
     if not page:
-        print("ERROR: no chatgpt page", file=sys.stderr); return
+        print("ERROR: no chatgpt page", file=sys.stderr)
+        return
     page_ws = page["webSocketDebuggerUrl"]
     print(f"[v2] page ws: {page_ws}", flush=True)
 
     hits = []
     mid = 0
-    send_count_snapshot = None
 
     async with websockets.connect(page_ws, max_size=128 * 1024 * 1024) as ws:
         # Enable Network (page level, retry with bigger buffers)
@@ -56,13 +56,6 @@ async def main(listen_seconds: int) -> None:
         async def poll_conv_count():
             global send_count_snapshot
             try:
-                js = (
-                    "(async () => {"
-                    f"  var r = await fetch('/backend-api/conversation/{CONV}', {{credentials:'include'}});"
-                    "  var d = await r.json();"
-                    "  return JSON.stringify({n: Object.keys(d.mapping||{}).length, current: d.current_node});"
-                    "})()"
-                )
                 # We can't easily run JS on this ws without routing; instead use a second socket.
                 return None
             except Exception:
@@ -73,7 +66,7 @@ async def main(listen_seconds: int) -> None:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=1.0)
                 evt = json.loads(raw)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             m = evt.get("method")

@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.mcp_driver_pool import (
+from sloppa.mcp_driver_pool import (
     AccountThrottleBreaker,
     DriverLease,
     McpSessionDriverPool,

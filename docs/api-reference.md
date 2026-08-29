@@ -1,6 +1,6 @@
 # API Reference
 
-ChatGPT-Web2API exposes two interfaces: an OpenAI-compatible REST API and an MCP server.
+Sloppa exposes two interfaces: an OpenAI-compatible REST API and an MCP server.
 
 ## REST API
 

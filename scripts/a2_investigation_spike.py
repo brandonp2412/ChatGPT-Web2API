@@ -23,7 +23,6 @@ import urllib.request
 
 import websockets
 
-
 CDP_PORT = 9222
 BRIDGE = "http://127.0.0.1:8080"
 CONVERSATION_ID = "6a48625b-34a4-83ed-93ba-a7153c2e6295"
@@ -213,7 +212,6 @@ async def main(label: str) -> None:
     print(f"[spike] attached to target: {target['url'][:80]}")
 
     sent_marker = f"SPIKE-{label}-{int(time.time())}"
-    captured_network = []  # Phase 1 captures
 
     async with websockets.connect(ws_url, max_size=None) as ws:
         # Enable Network domain to observe outgoing requests during the send.
@@ -235,7 +233,7 @@ async def main(label: str) -> None:
         while True:
             try:
                 _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
 
         # Fire the bridge send in a background task; meanwhile collect Network events.
@@ -249,7 +247,7 @@ async def main(label: str) -> None:
                 pass
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=0.3)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 if send_task.done():
                     break
                 continue

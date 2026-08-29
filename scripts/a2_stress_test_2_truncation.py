@@ -40,7 +40,7 @@ def find_target():
 def make_prompt(target_bytes: int) -> str:
     """Build a prompt of approximately target_bytes.
     The filler is distinctive so we can detect truncation."""
-    header = f"Reply with exactly: TRUNC-TEST. Then ignore the following filler:\n\n"
+    header = "Reply with exactly: TRUNC-TEST. Then ignore the following filler:\n\n"
     # Each filler line ~80 chars
     filler_line = "FILLER-{:06d}-" + ("x" * 60) + "\n"
     body = ""
@@ -80,7 +80,8 @@ async def main():
     async with websockets.connect(ws_url, max_size=None) as ws:
         nxt = [0]
         def nid():
-            nxt[0] += 1; return nxt[0]
+            nxt[0] += 1
+            return nxt[0]
 
         # Enable Network with maxPostDataSize=4MB (well above any test size)
         await ws.send(json.dumps({"id": nid(), "method": "Network.enable",
@@ -100,7 +101,7 @@ async def main():
             while True:
                 try:
                     _ = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     break
 
             send_task = asyncio.create_task(bridge_send(prompt))
@@ -109,7 +110,7 @@ async def main():
             while time.time() < deadline:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=0.5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     if send_task.done():
                         break
                     continue

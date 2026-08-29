@@ -15,7 +15,7 @@ DOM, and a real shared account/session**.
 ## Live validation run — 2026-07-03
 
 Environment: Chrome 149 on CDP 9222 (logged in, account: Nabeel Alajmah),
-master @ `606fdee`. Workers started fresh from master with `W2A_PARALLEL_TABS=1`.
+master @ `606fdee`. Workers started fresh from master with `SLOPPA_PARALLEL_TABS=1`.
 
 | Section | Result | Evidence |
 |---------|--------|----------|
@@ -64,9 +64,9 @@ parallelism re-confirmed still parallel.
       default-off legacy mode. Old port-lock-only and new per-target-lock
       workers do **not** exclude each other; mixing them reintroduces
       split-brain. (See deployment.md rollout warning.)
-- [ ] **Distinct `W2A_INSTANCE_ID` per worker** (or rely on the transport-aware
+- [ ] **Distinct `SLOPPA_INSTANCE_ID` per worker** (or rely on the transport-aware
       default: `rest:{port}` / `mcp:sse:{host}:{port}` / `mcp:stdio:{pid}`).
-      Do NOT reuse one `W2A_INSTANCE_ID` across live workers — they will collide
+      Do NOT reuse one `SLOPPA_INSTANCE_ID` across live workers — they will collide
       on one tab-registry entry.
 
 ## 1. Default-off smoke

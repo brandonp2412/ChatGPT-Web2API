@@ -17,9 +17,9 @@ CDP `/json/list` snapshots + log excerpts are the primary evidence.
 Usage (default — against already-started endpoints)::
 
     # Terminal 1
-    W2A_PARALLEL_TABS=1 chatgpt-web2api --port 8081 --cdp-port 9222
+    SLOPPA_PARALLEL_TABS=1 sloppa --port 8081 --cdp-port 9222
     # Terminal 2
-    W2A_PARALLEL_TABS=1 chatgpt-web2api --port 8082 --cdp-port 9222
+    SLOPPA_PARALLEL_TABS=1 sloppa --port 8082 --cdp-port 9222
     # Terminal 3 (this script)
     python scripts/parallel_canary.py --ports 8081,8082 --cdp-port 9222
 

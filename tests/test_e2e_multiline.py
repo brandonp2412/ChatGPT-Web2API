@@ -9,7 +9,7 @@ emits none — so every multi-line prompt failed canonical equality and raised
 (the extractor runs in JS inside the page). This opt-in e2e sends a
 multi-line prompt and asserts it lands, pinning the block-aware extractor.
 
-Run with:  W2A_E2E_RUN=1 pytest tests/test_e2e_multiline.py -m e2e -v
+Run with:  SLOPPA_E2E_RUN=1 pytest tests/test_e2e_multiline.py -m e2e -v
 """
 
 import secrets
@@ -17,8 +17,8 @@ import time
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, GenerationStuckError
-from chatgpt_web2api.config import Config
+from sloppa.cdp_driver import CDPDriver, GenerationStuckError
+from sloppa.config import Config
 
 pytestmark = pytest.mark.e2e
 

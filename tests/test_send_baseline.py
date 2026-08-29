@@ -17,7 +17,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver, CDPJSError, SendReadinessError
+from sloppa.cdp_driver import CDPDriver, CDPJSError, SendReadinessError
 
 
 def _make_driver() -> CDPDriver:
@@ -35,7 +35,7 @@ async def test_baseline_succeeds_first_try(monkeypatch):
     d._js_strict = AsyncMock(side_effect=["3", "5"])  # assistant=3, user=5
 
     # Patch asyncio.sleep so retries don't actually wait
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     count = await d._read_assistant_count_baseline()
@@ -50,7 +50,7 @@ async def test_baseline_retries_then_succeeds(monkeypatch):
         side_effect=[CDPJSError("timeout"), "2", "1"]  # fail, then assistant=2, user=1
     )
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     count = await d._read_assistant_count_baseline()
@@ -69,7 +69,7 @@ async def test_baseline_fail_closed_after_retries(monkeypatch):
         ]
     )
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     with pytest.raises(SendReadinessError, match="Cannot establish pre-send"):
@@ -87,7 +87,7 @@ async def test_baseline_never_returns_zero_on_failure(monkeypatch):
     d = _make_driver()
     d._js_strict = AsyncMock(side_effect=CDPJSError("DOM not ready"))
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     # Must raise, not silently return 0
@@ -108,10 +108,10 @@ async def test_baseline_logs_diagnostics(monkeypatch, caplog):
     d._js_strict = AsyncMock(side_effect=["7", "4"])  # assistant=7, user=4
     d._current_conv_id = "test-conv-123"
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
-    with caplog.at_level(logging.INFO, logger="chatgpt_web2api.cdp_driver"):
+    with caplog.at_level(logging.INFO, logger="sloppa.cdp_driver"):
         count = await d._read_assistant_count_baseline()
 
     assert count == 7
@@ -132,7 +132,7 @@ async def test_baseline_accepts_numeric_zero_when_dom_is_empty(monkeypatch):
     d = _make_driver()
     d._js_strict = AsyncMock(side_effect=[0, 0])  # numeric 0, not string
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     count = await d._read_assistant_count_baseline()
@@ -146,7 +146,7 @@ async def test_baseline_malformed_string_retries_then_fails(monkeypatch):
     d = _make_driver()
     d._js_strict = AsyncMock(side_effect=["not-an-int", "bad", "also-bad"])
 
-    import chatgpt_web2api.cdp_driver as drv_mod
+    import sloppa.cdp_driver as drv_mod
     monkeypatch.setattr(drv_mod.asyncio, "sleep", AsyncMock())
 
     with pytest.raises(SendReadinessError, match="Cannot establish pre-send"):

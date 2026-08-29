@@ -19,9 +19,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-import chatgpt_web2api.mcp_server as mod
-from chatgpt_web2api.cdp_driver import StreamChunk
-from chatgpt_web2api.mcp_server import (
+import sloppa.mcp_server as mod
+from sloppa.cdp_driver import StreamChunk
+from sloppa.mcp_server import (
     DESTRUCTIVE_ENV,
     WRITE_ENV,
     ToolName,

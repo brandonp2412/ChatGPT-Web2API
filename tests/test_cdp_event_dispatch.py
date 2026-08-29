@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_transport import CDPTransport
+from sloppa.cdp_transport import CDPTransport
 
 
 def _make_driver():

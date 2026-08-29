@@ -1,6 +1,6 @@
 """Tests for the diagnostic detector + capture."""
 
-from chatgpt_web2api.diagnostics import EXPECTED_SHAPES, classify_result
+from sloppa.diagnostics import EXPECTED_SHAPES, classify_result
 
 
 def test_classify_healthy_list():
@@ -96,7 +96,7 @@ def test_classify_semantic_ignored_when_asserted_key_absent():
 
 import json
 
-from chatgpt_web2api.diagnostics import DiagnosticsDir, redact
+from sloppa.diagnostics import DiagnosticsDir, redact
 
 
 def test_redact_strips_auth_tokens_and_emails():
@@ -158,13 +158,13 @@ def test_capture_volume_cap_keeps_newest(tmp_path):
 
 import asyncio
 
-from chatgpt_web2api.diagnostics import diagnose, set_capture_enabled
+from sloppa.diagnostics import diagnose, set_capture_enabled
 
 
 def test_diagnose_decorator_passes_through_healthy(monkeypatch, tmp_path):
     """A healthy result is returned unchanged; no artifact written."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR",
+    from sloppa.diagnostics import DiagnosticsDir
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR",
                         DiagnosticsDir(base=tmp_path))
     set_capture_enabled(True)
 
@@ -181,8 +181,8 @@ def test_diagnose_decorator_passes_through_healthy(monkeypatch, tmp_path):
 
 def test_diagnose_decorator_captures_on_broken(monkeypatch, tmp_path):
     """A broken result is still returned, but an artifact is captured."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR",
+    from sloppa.diagnostics import DiagnosticsDir
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR",
                         DiagnosticsDir(base=tmp_path))
     set_capture_enabled(True)
 
@@ -204,8 +204,8 @@ def test_diagnose_decorator_captures_on_broken(monkeypatch, tmp_path):
 
 def test_diagnose_capture_disabled_by_default_writes_nothing(monkeypatch, tmp_path):
     """Capture is OFF unless enabled — no surprise disk writes."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR",
+    from sloppa.diagnostics import DiagnosticsDir
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR",
                         DiagnosticsDir(base=tmp_path))
     set_capture_enabled(False)
 
@@ -220,13 +220,13 @@ def test_diagnose_capture_disabled_by_default_writes_nothing(monkeypatch, tmp_pa
 
 def test_diagnose_capture_failure_never_masks_original(monkeypatch, tmp_path):
     """If the capture itself errors, the original result is still returned."""
-    from chatgpt_web2api.diagnostics import DiagnosticsDir
+    from sloppa.diagnostics import DiagnosticsDir
     # A DiagnosticsDir whose base can't be written to → capture raises internally
-    monkeypatch.setattr("chatgpt_web2api.diagnostics._DIAG_DIR",
+    monkeypatch.setattr("sloppa.diagnostics._DIAG_DIR",
                         DiagnosticsDir(base=tmp_path))
     set_capture_enabled(True)
     # Make capture blow up by patching redact to raise.
-    monkeypatch.setattr("chatgpt_web2api.diagnostics.redact",
+    monkeypatch.setattr("sloppa.diagnostics.redact",
                         lambda obj: (_ for _ in ()).throw(RuntimeError("boom")))
 
     class Stub:
@@ -242,16 +242,16 @@ def test_diagnose_capture_failure_never_masks_original(monkeypatch, tmp_path):
 # ── env-gated enablement (Task 4) ─────────────────────────────
 
 def test_capture_enabled_by_env(monkeypatch):
-    """W2A_DIAGNOSE=1 enables capture; absent/untruthy leaves it off."""
-    import chatgpt_web2api.diagnostics as dmod
-    monkeypatch.setenv("W2A_DIAGNOSE", "1")
+    """SLOPPA_DIAGNOSE=1 enables capture; absent/untruthy leaves it off."""
+    import sloppa.diagnostics as dmod
+    monkeypatch.setenv("SLOPPA_DIAGNOSE", "1")
     dmod.apply_env_enablement()
     assert dmod._capture_enabled is True
 
-    monkeypatch.delenv("W2A_DIAGNOSE", raising=False)
+    monkeypatch.delenv("SLOPPA_DIAGNOSE", raising=False)
     dmod.apply_env_enablement()
     assert dmod._capture_enabled is False
 
-    monkeypatch.setenv("W2A_DIAGNOSE", "false")
+    monkeypatch.setenv("SLOPPA_DIAGNOSE", "false")
     dmod.apply_env_enablement()
     assert dmod._capture_enabled is False

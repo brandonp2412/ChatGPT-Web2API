@@ -14,7 +14,7 @@ import pytest
 @pytest.fixture
 def mock_driver():
     """Create a mocked CDPDriver with all methods as AsyncMock."""
-    from chatgpt_web2api.cdp_driver import CDPDriver, StreamChunk
+    from sloppa.cdp_driver import CDPDriver, StreamChunk
 
     driver = MagicMock(spec=CDPDriver)
     driver._current_conv_id = None
@@ -87,7 +87,7 @@ def mock_driver():
 @pytest.fixture
 def mock_config():
     """Create a test Config."""
-    from chatgpt_web2api.config import Config
+    from sloppa.config import Config
     return Config.load(None)
 
 
@@ -95,7 +95,7 @@ def mock_config():
 
 @pytest.mark.asyncio
 async def test_list_models(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_models
+    from sloppa.mcp_server import do_list_models
     result = await do_list_models(mock_driver)
     assert "models" in result
     assert len(result["models"]) == 3
@@ -105,7 +105,7 @@ async def test_list_models(mock_driver):
 
 @pytest.mark.asyncio
 async def test_list_models_extracts_slug_and_title(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_models
+    from sloppa.mcp_server import do_list_models
     result = await do_list_models(mock_driver)
     for m in result["models"]:
         assert "id" in m
@@ -116,7 +116,7 @@ async def test_list_models_extracts_slug_and_title(mock_driver):
 
 @pytest.mark.asyncio
 async def test_list_projects(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_projects
+    from sloppa.mcp_server import do_list_projects
     result = await do_list_projects(mock_driver)
     assert "projects" in result
     assert len(result["projects"]) == 1
@@ -128,7 +128,7 @@ async def test_list_projects(mock_driver):
 
 @pytest.mark.asyncio
 async def test_list_conversations(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_conversations
+    from sloppa.mcp_server import do_list_conversations
     result = await do_list_conversations(mock_driver, {"offset": 0, "limit": 28})
     assert "conversations" in result
     assert len(result["conversations"]) == 1
@@ -146,7 +146,7 @@ def test_list_conversations_output_schema_accepts_iso_update_time():
     """
     import jsonschema
 
-    from chatgpt_web2api.mcp_server import LIST_CONVERSATIONS_OUTPUT
+    from sloppa.mcp_server import LIST_CONVERSATIONS_OUTPUT
 
     base = {
         "conversations": [
@@ -169,7 +169,7 @@ def test_list_conversations_output_schema_accepts_iso_update_time():
 
 @pytest.mark.asyncio
 async def test_get_conversation(mock_driver):
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     result = await do_get_conversation(mock_driver, {"conversation_id": "conv-1"})
     assert "messages" in result
     assert result["id"] == "conv-1"
@@ -181,7 +181,7 @@ def _long_conversation_driver(n_messages):
     current_node = the last node. Mirrors the real ChatGPT mapping shape."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     driver = MagicMock(spec=CDPDriver)
     mapping = {}
@@ -209,7 +209,7 @@ def _long_conversation_driver(n_messages):
 async def test_get_conversation_default_backward_compat():
     """Default call (no pagination args) returns all messages + pagination
     metadata, and behaves like the old single-shot read for small threads."""
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     driver = _long_conversation_driver(5)
     result = await do_get_conversation(driver, {"conversation_id": "conv-long"})
     assert result["total"] == 5
@@ -224,7 +224,7 @@ async def test_get_conversation_default_backward_compat():
 @pytest.mark.asyncio
 async def test_get_conversation_offset_skips_first_page():
     """offset skips earlier messages; page 2 starts where page 1 ended."""
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     driver = _long_conversation_driver(12)
     p1 = await do_get_conversation(driver, {"conversation_id": "conv-long", "offset": 0, "limit": 5})
     p2 = await do_get_conversation(driver, {"conversation_id": "conv-long", "offset": 5, "limit": 5})
@@ -238,7 +238,7 @@ async def test_get_conversation_offset_skips_first_page():
 @pytest.mark.asyncio
 async def test_get_conversation_last_page_has_more_false():
     """The final page sets has_more=False and may be shorter than limit."""
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     driver = _long_conversation_driver(12)
     last = await do_get_conversation(driver, {"conversation_id": "conv-long", "offset": 10, "limit": 5})
     assert last["total"] == 12
@@ -250,7 +250,7 @@ async def test_get_conversation_last_page_has_more_false():
 @pytest.mark.asyncio
 async def test_get_conversation_offset_beyond_end_empty():
     """offset >= total returns an empty page, has_more=False (no infinite loop)."""
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     driver = _long_conversation_driver(5)
     over = await do_get_conversation(driver, {"conversation_id": "conv-long", "offset": 100, "limit": 50})
     assert over["total"] == 5
@@ -262,7 +262,7 @@ async def test_get_conversation_offset_beyond_end_empty():
 async def test_get_conversation_full_page_through_assembles_whole_thread():
     """Paging through offset 0,5,10,... reconstructs the entire conversation in
     order — the actual goal: read the whole chat without truncation."""
-    from chatgpt_web2api.mcp_server import do_get_conversation
+    from sloppa.mcp_server import do_get_conversation
     n = 23
     driver = _long_conversation_driver(n)
     assembled = []
@@ -280,7 +280,7 @@ async def test_get_conversation_full_page_through_assembles_whole_thread():
 
 @pytest.mark.asyncio
 async def test_delete_conversation(mock_driver):
-    from chatgpt_web2api.mcp_server import do_delete_conversation
+    from sloppa.mcp_server import do_delete_conversation
     result = await do_delete_conversation(mock_driver, {"conversation_id": "conv-1"})
     assert result["success"] is True
     assert result["conversation_id"] == "conv-1"
@@ -291,7 +291,7 @@ async def test_delete_conversation(mock_driver):
 
 @pytest.mark.asyncio
 async def test_delete_project(mock_driver):
-    from chatgpt_web2api.mcp_server import do_delete_project
+    from sloppa.mcp_server import do_delete_project
     mock_driver.delete_project = AsyncMock(return_value={"success": True, "project_id": "g-p-1"})
     result = await do_delete_project(mock_driver, {"project_id": "g-p-1"})
     assert result["success"] is True
@@ -303,7 +303,7 @@ async def test_delete_project(mock_driver):
 
 @pytest.mark.asyncio
 async def test_archive_conversation(mock_driver):
-    from chatgpt_web2api.mcp_server import do_archive_conversation
+    from sloppa.mcp_server import do_archive_conversation
     result = await do_archive_conversation(mock_driver, {
         "conversation_id": "conv-1", "archive": True,
     })
@@ -315,7 +315,7 @@ async def test_archive_conversation(mock_driver):
 
 @pytest.mark.asyncio
 async def test_create_project(mock_driver):
-    from chatgpt_web2api.mcp_server import do_create_project
+    from sloppa.mcp_server import do_create_project
     result = await do_create_project(mock_driver, {
         "name": "New Project", "instructions": "Be helpful",
     })
@@ -330,7 +330,7 @@ async def test_create_project(mock_driver):
 
 @pytest.mark.asyncio
 async def test_update_project_instructions(mock_driver):
-    from chatgpt_web2api.mcp_server import do_update_project_instructions
+    from sloppa.mcp_server import do_update_project_instructions
     result = await do_update_project_instructions(mock_driver, {
         "project_id": "g-p-test", "instructions": "New instructions",
     })
@@ -342,7 +342,7 @@ async def test_update_project_instructions(mock_driver):
 
 @pytest.mark.asyncio
 async def test_list_memories(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_memories
+    from sloppa.mcp_server import do_list_memories
     result = await do_list_memories(mock_driver)
     assert "memories" in result
     assert len(result["memories"]) == 1
@@ -353,7 +353,7 @@ async def test_list_memories(mock_driver):
 
 @pytest.mark.asyncio
 async def test_create_memory(mock_driver):
-    from chatgpt_web2api.mcp_server import do_create_memory
+    from sloppa.mcp_server import do_create_memory
     result = await do_create_memory(mock_driver, {"content": "Remember this"})
     assert "content" in result
     mock_driver.create_memory.assert_called_once_with(content="Remember this")
@@ -363,7 +363,7 @@ async def test_create_memory(mock_driver):
 
 @pytest.mark.asyncio
 async def test_delete_memory(mock_driver):
-    from chatgpt_web2api.mcp_server import do_delete_memory
+    from sloppa.mcp_server import do_delete_memory
     result = await do_delete_memory(mock_driver, {"memory_id": "mem-1"})
     assert result["success"] is True
     assert result["memory_id"] == "mem-1"
@@ -376,7 +376,7 @@ def test_delete_memory_output_schema_matches_returned_shape():
     (which requires conversation_id), but the handler returns memory_id —
     so any actual call failed MCP output validation.
     """
-    from chatgpt_web2api.mcp_server import ToolName, _build_tools
+    from sloppa.mcp_server import ToolName, _build_tools
     tools = {t.name: t for t in _build_tools()}
     schema = tools[ToolName.DELETE_MEMORY.value].outputSchema
     required = set(schema["required"])
@@ -390,7 +390,7 @@ def test_delete_memory_output_schema_matches_returned_shape():
 
 @pytest.mark.asyncio
 async def test_list_gpts(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_gpts
+    from sloppa.mcp_server import do_list_gpts
     result = await do_list_gpts(mock_driver)
     assert "gpts" in result
     assert len(result["gpts"]) == 1
@@ -401,7 +401,7 @@ async def test_list_gpts(mock_driver):
 
 @pytest.mark.asyncio
 async def test_list_project_files(mock_driver):
-    from chatgpt_web2api.mcp_server import do_list_project_files
+    from sloppa.mcp_server import do_list_project_files
     result = await do_list_project_files(mock_driver, {"project_id": "g-p-test"})
     assert "files" in result
     assert len(result["files"]) == 1
@@ -412,7 +412,7 @@ async def test_list_project_files(mock_driver):
 
 @pytest.mark.asyncio
 async def test_chat_completion_basic(mock_driver, mock_config):
-    from chatgpt_web2api.mcp_server import do_chat_completion
+    from sloppa.mcp_server import do_chat_completion
     result = await do_chat_completion(mock_driver, {
         "message": "Hello",
     }, mock_config)
@@ -424,7 +424,7 @@ async def test_chat_completion_basic(mock_driver, mock_config):
 
 @pytest.mark.asyncio
 async def test_chat_completion_with_system_prompt(mock_driver, mock_config):
-    from chatgpt_web2api.mcp_server import do_chat_completion
+    from sloppa.mcp_server import do_chat_completion
     result = await do_chat_completion(mock_driver, {
         "message": "Hello",
         "system_prompt": "Be concise",
@@ -436,7 +436,7 @@ async def test_chat_completion_with_system_prompt(mock_driver, mock_config):
 
 @pytest.mark.asyncio
 async def test_chat_completion_with_project(mock_driver, mock_config):
-    from chatgpt_web2api.mcp_server import do_chat_completion
+    from sloppa.mcp_server import do_chat_completion
     result = await do_chat_completion(mock_driver, {
         "message": "Hello",
         "project_id": "g-p-test",
@@ -447,7 +447,7 @@ async def test_chat_completion_with_project(mock_driver, mock_config):
 
 @pytest.mark.asyncio
 async def test_chat_completion_with_model(mock_driver, mock_config):
-    from chatgpt_web2api.mcp_server import do_chat_completion
+    from sloppa.mcp_server import do_chat_completion
     result = await do_chat_completion(mock_driver, {
         "message": "Hello",
         "model": "gpt-5-5",
@@ -458,7 +458,7 @@ async def test_chat_completion_with_model(mock_driver, mock_config):
 
 @pytest.mark.asyncio
 async def test_chat_completion_auto_model_no_select(mock_driver, mock_config):
-    from chatgpt_web2api.mcp_server import do_chat_completion
+    from sloppa.mcp_server import do_chat_completion
     _result = await do_chat_completion(mock_driver, {
         "message": "Hello",
         "model": "auto",
@@ -470,7 +470,7 @@ async def test_chat_completion_auto_model_no_select(mock_driver, mock_config):
 
 @pytest.mark.asyncio
 async def test_chat_with_gpt(mock_driver):
-    from chatgpt_web2api.mcp_server import do_chat_with_gpt
+    from sloppa.mcp_server import do_chat_with_gpt
     result = await do_chat_with_gpt(mock_driver, {
         "gpt_id": "gpt-1", "message": "Write code",
     })
@@ -484,9 +484,9 @@ async def test_chat_with_gpt(mock_driver):
 @pytest.mark.asyncio
 async def test_api_message_history_includes_assistant():
     """Verify that assistant messages are preserved in the conversation text."""
-    from chatgpt_web2api.api_server import APIServer
-    from chatgpt_web2api.cdp_driver import CDPDriver, StreamChunk
-    from chatgpt_web2api.config import Config
+    from sloppa.api_server import APIServer
+    from sloppa.cdp_driver import CDPDriver, StreamChunk
+    from sloppa.config import Config
 
     config = Config.load(None)
     driver = MagicMock(spec=CDPDriver)
@@ -538,7 +538,7 @@ async def test_api_message_history_includes_assistant():
 @pytest.mark.asyncio
 async def test_api_model_selection_called():
     """Verify select_model is called for non-auto models."""
-    from chatgpt_web2api.cdp_driver import CDPDriver, StreamChunk
+    from sloppa.cdp_driver import CDPDriver, StreamChunk
 
     driver = MagicMock(spec=CDPDriver)
     driver.is_connected = True
@@ -554,8 +554,8 @@ async def test_api_model_selection_called():
     driver.navigate_new_chat = AsyncMock()
     driver.navigate_conversation = AsyncMock()
 
-    from chatgpt_web2api.api_server import APIServer
-    from chatgpt_web2api.config import Config
+    from sloppa.api_server import APIServer
+    from sloppa.config import Config
 
     config = Config.load(None)
     server = APIServer(config, driver)
@@ -569,25 +569,25 @@ async def test_api_model_selection_called():
     # (tested through do_chat_completion above, this validates the path exists)
 
 
-# ── Config: W2A_HEADLESS env ─────────────────────────────────
+# ── Config: SLOPPA_HEADLESS env ─────────────────────────────────
 
 def test_config_headless_env(monkeypatch):
-    """W2A_HEADLESS env var is read correctly."""
-    from chatgpt_web2api.config import Config
+    """SLOPPA_HEADLESS env var is read correctly."""
+    from sloppa.config import Config
 
-    monkeypatch.setenv("W2A_HEADLESS", "true")
+    monkeypatch.setenv("SLOPPA_HEADLESS", "true")
     config = Config.load(None)
     assert config.chrome.headless is True
 
-    monkeypatch.setenv("W2A_HEADLESS", "false")
+    monkeypatch.setenv("SLOPPA_HEADLESS", "false")
     config = Config.load(None)
     assert config.chrome.headless is False
 
-    monkeypatch.setenv("W2A_HEADLESS", "1")
+    monkeypatch.setenv("SLOPPA_HEADLESS", "1")
     config = Config.load(None)
     assert config.chrome.headless is True
 
-    monkeypatch.delenv("W2A_HEADLESS", raising=False)
+    monkeypatch.delenv("SLOPPA_HEADLESS", raising=False)
     config = Config.load(None)
     assert config.chrome.headless is False  # default
 

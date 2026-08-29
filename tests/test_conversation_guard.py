@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.cdp_driver import CDPDriver
+from sloppa.cdp_driver import CDPDriver
 
 # ── 1. Static URL matcher ─────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ async def test_live_url_true_when_href_matches():
 async def test_live_url_false_on_cdp_read_failure():
     """An unreadable location.href must return False (fail-closed at the
     ensure_current_conversation layer, not here)."""
-    from chatgpt_web2api.cdp_driver import CDPJSError
+    from sloppa.cdp_driver import CDPJSError
     d = CDPDriver(cdp_port=9222)
     d._js_strict = AsyncMock(side_effect=CDPJSError("context destroyed"))
     assert await d._is_live_conversation_url("abc-123") is False
@@ -227,7 +227,7 @@ async def test_navigate_conversation_raises_and_clears_when_never_ready(monkeypa
     # Collapse the sleeps so the 30-iteration loop runs fast.
     async def _fast(_s):
         return None
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.asyncio.sleep", _fast)
+    monkeypatch.setattr("sloppa.cdp_driver.asyncio.sleep", _fast)
 
     # P2: error message now names the failed stage instead of the old opaque msg.
     with pytest.raises(RuntimeError, match="composer"):
@@ -247,7 +247,7 @@ async def test_rest_auto_continue_invokes_ensure_current(monkeypatch):
     _full_response is stubbed to raise so we can prove the guard ran before
     the response path without coupling to the streaming internals.
     """
-    import chatgpt_web2api.api_server as srv
+    import sloppa.api_server as srv
 
     server = srv.APIServer.__new__(srv.APIServer)  # bypass __init__
     server._last_conv_id = "conv-rest-1"
@@ -310,8 +310,8 @@ async def test_mcp_auto_continue_invokes_ensure_current():
     is set and no system_prompt/project_id → continue branch. send_and_stream
     raises to prove we reached past the guard.
     """
-    from chatgpt_web2api import mcp_server as mod
-    from chatgpt_web2api.config import Config
+    from sloppa import mcp_server as mod
+    from sloppa.config import Config
 
     driver = MagicMock()
     driver._current_conv_id = "conv-mcp-1"
@@ -419,7 +419,7 @@ async def test_connect_calls_ensure_send_ready_after_auth(monkeypatch):
     async def _noop_ws(*a, **kw):
         return MagicMock()
     # Stub the CDP plumbing so connect runs its body without a real Chrome.
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.websockets.connect", _noop_ws)
+    monkeypatch.setattr("sloppa.cdp_driver.websockets.connect", _noop_ws)
     d._find_page_ws = lambda: "ws://fake"
     d._find_owned_tab_ws = lambda: None
     d._adopt_existing_chatgpt_tab = lambda: None
@@ -453,7 +453,7 @@ async def test_connect_survives_send_readiness_failure(monkeypatch):
 
     async def _noop_ws(*a, **kw):
         return MagicMock()
-    monkeypatch.setattr("chatgpt_web2api.cdp_driver.websockets.connect", _noop_ws)
+    monkeypatch.setattr("sloppa.cdp_driver.websockets.connect", _noop_ws)
     d._find_page_ws = lambda: "ws://fake"
     d._find_owned_tab_ws = lambda: None
     d._adopt_existing_chatgpt_tab = lambda: None

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.chatgpt_dom import (
+from sloppa.chatgpt_dom import (
     COMPOSER_FALLBACK_SELECTOR,
     COMPOSER_SELECTOR,
     SEND_BUTTON_FALLBACK_SELECTOR,
@@ -80,7 +80,7 @@ def test_selectors_live_in_chatgpt_dom():
 def test_selectors_reexported_from_cdp_driver():
     """cdp_driver must re-export the selectors for back-compat (tests and the
     navigation methods that stay there import them from cdp_driver)."""
-    from chatgpt_web2api import cdp_driver
+    from sloppa import cdp_driver
 
     assert cdp_driver.COMPOSER_SELECTOR is COMPOSER_SELECTOR
     assert cdp_driver.COMPOSER_FALLBACK_SELECTOR is COMPOSER_FALLBACK_SELECTOR
@@ -143,8 +143,8 @@ async def test_ensure_send_ready_routes_navigation_through_driver():
     """When the composer is missing, _ensure_send_ready must navigate via
     driver.navigate_new_chat (not a dom-local nav) and record the breaker
     failure through driver._breakers."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
-    from chatgpt_web2api.cdp_driver import SendReadinessError
+    from sloppa.breakers import BreakerKind, BreakerRegistry
+    from sloppa.cdp_driver import SendReadinessError
 
     dom, driver = _make_dom()
     reg = BreakerRegistry()
@@ -167,7 +167,7 @@ async def test_ensure_send_ready_routes_navigation_through_driver():
 async def test_click_send_records_success_through_driver_breaker():
     """A confirmed send must record_success via driver._breakers (half-open
     recovery) — the registry stays on the driver, not the dom."""
-    from chatgpt_web2api.breakers import BreakerKind, BreakerRegistry
+    from sloppa.breakers import BreakerKind, BreakerRegistry
 
     dom, driver = _make_dom()
     reg = BreakerRegistry()
@@ -223,7 +223,7 @@ def test_dom_holds_no_driver_state():
 
 def test_driver_wires_chatgpt_dom():
     """CDPDriver.__init__ constructs a ChatGPTDom and delegates through it."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     assert isinstance(d._dom, ChatGPTDom)
@@ -234,7 +234,7 @@ def test_driver_delegators_preserve_signatures():
     """All 9 moved methods remain callable on the driver (delegators), so
     internal call sites and test stubs that patch driver.type_message /
     driver.click_send etc. keep working unchanged."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     for name in (
@@ -257,7 +257,7 @@ def test_driver_delegators_preserve_signatures():
 def test_breaker_registry_stays_on_driver():
     """The breaker registry must live on CDPDriver (default None, set via
     ctor), never on ChatGPTDom."""
-    from chatgpt_web2api.cdp_driver import CDPDriver
+    from sloppa.cdp_driver import CDPDriver
 
     d = CDPDriver(cdp_port=9222)
     assert hasattr(d, "_breakers")
@@ -277,7 +277,7 @@ def test_breaker_registry_stays_on_driver():
 async def test_click_send_waits_then_sends(monkeypatch):
     """The poll loop waits through several 'no' responses until the button is
     enabled, then the click succeeds."""
-    import chatgpt_web2api.chatgpt_dom as dom_mod
+    import sloppa.chatgpt_dom as dom_mod
 
     monkeypatch.setattr(dom_mod, "SEND_BUTTON_POLL_INTERVAL_S", 0.01)
     monkeypatch.setattr(dom_mod, "SEND_BUTTON_POLL_MAX_WAIT_S", 2.0)
@@ -297,7 +297,7 @@ async def test_click_send_waits_then_sends(monkeypatch):
 async def test_click_send_raises_on_budget_exhausted(monkeypatch):
     """When the send button never becomes enabled within the budget, the loop
     exhausts and the final click raises SendReadinessError."""
-    import chatgpt_web2api.chatgpt_dom as dom_mod
+    import sloppa.chatgpt_dom as dom_mod
 
     monkeypatch.setattr(dom_mod, "SEND_BUTTON_POLL_INTERVAL_S", 0.01)
     monkeypatch.setattr(dom_mod, "SEND_BUTTON_POLL_MAX_WAIT_S", 0.05)
@@ -306,7 +306,7 @@ async def test_click_send_raises_on_budget_exhausted(monkeypatch):
     # Every _js call returns "no" — button never appears.
     driver._js = AsyncMock(return_value="no")
 
-    from chatgpt_web2api.cdp_driver import SendReadinessError
+    from sloppa.cdp_driver import SendReadinessError
 
     with pytest.raises(SendReadinessError, match="Send failed"):
         await dom.click_send()

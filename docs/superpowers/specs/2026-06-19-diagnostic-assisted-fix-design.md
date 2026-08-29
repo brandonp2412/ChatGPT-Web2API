@@ -53,7 +53,7 @@ Production call (e.g. create_project)
    fails / malformed
         │
         ▼
-   [Capture] ──▶ ~/.chatgpt-web2api/diagnostics/<func>-<ts>.json
+   [Capture] ──▶ ~/.sloppa/diagnostics/<func>-<ts>.json
         │            (request, live response, DOM, expected vs actual,
         │             context — all redacted)
         ▼
@@ -96,7 +96,7 @@ the caller's behavior is unchanged.
 ### 2. Diagnostic capture (the artifact)
 
 When the detector triggers, dump a structured JSON artifact to
-`~/.chatgpt-web2api/diagnostics/<function>-<timestamp>.json` containing:
+`~/.sloppa/diagnostics/<function>-<timestamp>.json` containing:
 
 - `function`: the driver method name.
 - `timestamp`: ISO-8601.
@@ -121,7 +121,7 @@ or worsen the original error. Capture errors are logged and swallowed.
 
 ### 3. Assisted-fix workflow (`doctor` subcommand)
 
-A new `chatgpt-web2api doctor <function>` subcommand that:
+A new `sloppa doctor <function>` subcommand that:
 
 1. Reads the latest diagnostic artifact for `<function>` (or `--all` for every
    function with artifacts).

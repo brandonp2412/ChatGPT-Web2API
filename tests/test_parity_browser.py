@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from chatgpt_web2api.parity_browser import (
+from sloppa.parity_browser import (
     AttachmentStore,
     AttachmentTooLargeError,
     ParityBrowser,

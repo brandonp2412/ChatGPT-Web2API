@@ -3,7 +3,7 @@
   "host": "127.0.0.1",
   "cdp_port": 9222,
   "chrome_path": "auto",
-  "user_data_dir": "~/.chatgpt-web2api/chrome-profile",
+  "user_data_dir": "~/.sloppa/chrome-profile",
   "headless": false,
   "default_model": "auto",
   "default_project_id": null,
