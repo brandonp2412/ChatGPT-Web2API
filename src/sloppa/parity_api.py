@@ -2,7 +2,7 @@
 
 This extends the existing OpenAI-compatible API rather than replacing it.  The
 legacy endpoints remain unchanged; `/v1/chat/*`, conversations, attachments,
-voice and assets provide the richer semantics required by the Flutter client.
+voice and assets provide a richer first-party-like ChatGPT surface.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ class ParityAPIServer(APIServer):
         self.app.router.add_post("/v1/chat/send", self._handle_rich_send)
         self.app.router.add_post("/v1/chat/stop", self._handle_stop)
 
-        # Voice: Flutter terminates WebRTC; this backend only authenticates the
+        # Voice: the caller terminates WebRTC; this backend authenticates the
         # SDP exchange and provides attachment pointers for DataChannel relay.
         self.app.router.add_post("/v1/voice/session", self._handle_voice_session)
         self.app.router.add_post("/v1/voice/attachments", self._handle_voice_attachment)

@@ -1,14 +1,12 @@
 # Sloppa
 
-Sloppa is a local ChatGPT bridge and client. The Python backend exposes a REST/MCP API and keeps the browser session on the server. The Flutter app is a custom client that talks to that backend.
+Sloppa is a local, subscription-backed ChatGPT bridge. The Python service drives a persistent Chrome session logged into chatgpt.com and exposes REST and MCP interfaces for programmatic use.
 
 ## Run locally
 
-Requirements: Python 3.11+, Flutter, and Chrome or Chromium.
+Requirements: Python 3.11+ and Chrome or Chromium.
 
 Install [Astral uv](https://docs.astral.sh/uv/).
-
-### 1. Start the backend
 
 From the repository root:
 
@@ -17,41 +15,43 @@ uv sync --extra dev
 uv run sloppa
 ```
 
-On the first run, Sloppa opens Chrome. Sign in to ChatGPT in that browser. The backend is then available at `http://127.0.0.1:8080`.
+On the first run, Sloppa opens Chrome. Sign in to ChatGPT in that browser. The session is stored in the configured Chrome profile and reused on later starts. The REST API defaults to `http://127.0.0.1:8080`.
 
 `uv sync` installs this checkout and its dependencies into a local environment. The package does not need to be published to PyPI.
 
-### 2. Start the Flutter client
+## Interfaces
 
-In another terminal:
+Sloppa exposes an OpenAI-compatible chat-completions endpoint alongside richer ChatGPT conversation/project endpoints and an MCP server.
+
+Common endpoints include:
+
+- `POST /v1/chat/completions`
+- `POST /v1/chat/send`
+- `GET /v1/conversations`
+- `GET /v1/models`
+- `GET /v1/projects`
+- `GET /health`
+
+Run the MCP server with:
 
 ```bash
-cd client
-flutter pub get
-flutter run
+uv run sloppa-mcp
 ```
 
-The client defaults to `http://127.0.0.1:8080`. You can change the bridge URL in the app’s Settings.
+## Verification
 
-## Local client E2E test
-
-The deterministic test backend does not contact ChatGPT:
+Run the backend-only local checks with:
 
 ```bash
-cd client
-flutter build web --dart-define=SLOPPA_BRIDGE_URL=http://127.0.0.1:18080
-cd ..
-uv run python scripts/local_webdriver_e2e.py
+scripts/verify_local.sh
 ```
-
-This starts a local fixture API, serves the built Flutter web app, and checks the rendered client through local ChromeDriver.
 
 ## Repository layout
 
-- `src/sloppa/` — Python backend and MCP server
-- `client/` — Flutter frontend
-- `scripts/e2e_stub_backend.py` — deterministic local API fixture
-- `tests/` and `client/test/` — automated tests
+- `src/sloppa/` — Python backend, browser automation, REST API, and MCP server
+- `tests/` — backend automated tests
+- `scripts/` — backend diagnostics, live-capture utilities, and operational helpers
+- `docs/` — architecture, protocol, deployment, and reverse-engineering notes
 
 ## License
 

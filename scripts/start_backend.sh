@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Start a durable local bridge process for Flutter/Waydroid development.
+# Start a durable local Sloppa backend process.
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 runtime_dir="${SLOPPA_RUNTIME_DIR:-${project_dir}/.runtime}"
 log_file="${SLOPPA_LOG_FILE:-${runtime_dir}/backend.log}"

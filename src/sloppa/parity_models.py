@@ -1,7 +1,7 @@
 """Stable structured representation of ChatGPT conversation trees.
 
-The web conversation API is a tree, not a flat transcript. The Flutter client
-needs the selected branch for normal rendering *and* enough tree information to
+The web conversation API is a tree, not a flat transcript. API consumers need
+the selected branch for normal rendering *and* enough tree information to
 implement regenerate/edit/branch without throwing away ChatGPT metadata.
 
 Keep this module pure: it deliberately knows nothing about CDP or aiohttp so it

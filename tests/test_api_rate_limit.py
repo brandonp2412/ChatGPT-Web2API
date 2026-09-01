@@ -74,7 +74,7 @@ def test_timeout_error_maps_to_500():
 
 @pytest.mark.asyncio
 async def test_localhost_cors_preflight_is_allowed():
-    """Flutter web can call the local bridge during development."""
+    """A localhost browser client can call the local bridge during development."""
     server = _server()
     # Exercise the middleware through aiohttp's test request helper.
     from aiohttp.test_utils import make_mocked_request

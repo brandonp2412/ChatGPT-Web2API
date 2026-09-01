@@ -56,53 +56,9 @@ jobs:
       - name: Run tests
         run: pytest -v -m "not e2e"
 
-  flutter:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Generate Android runner
-        working-directory: client
-        run: flutter create --platforms=android --project-name sloppa .
-      - name: Require microphone and network permissions
-        working-directory: client
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('android/app/src/main/AndroidManifest.xml')
-          text = path.read_text()
-          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
-          permissions = (
-              '\n    <uses-permission android:name="android.permission.INTERNET" />'
-              '\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />'
-          )
-          if 'android.permission.RECORD_AUDIO' not in text:
-              text = text.replace(marker, marker + permissions)
-          path.write_text(text)
-          PY
-      - name: Install client dependencies
-        working-directory: client
-        run: flutter pub get
-      - name: Check Dart formatting
-        working-directory: client
-        run: dart format --output=none --set-exit-if-changed lib test
-      - name: Analyze client
-        working-directory: client
-        run: flutter analyze
-      - name: Test client
-        working-directory: client
-        run: flutter test
-      - name: Build Android debug APK
-        working-directory: client
-        run: flutter build apk --debug
-
   build:
     runs-on: ubuntu-latest
-    needs: [lint, secret-scan, test, flutter]
+    needs: [lint, secret-scan, test]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

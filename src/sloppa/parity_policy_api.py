@@ -22,8 +22,8 @@ async def _prepare_sensitive_response(
     """Apply policy before aiohttp commits headers, including SSE streams."""
     path = request.path
     if path.startswith("/v1/") or path in {"/chat/completions", "/v1/chat/completions"}:
-        # The native Flutter client deliberately maintains its own encrypted
-        # cache. Intermediary/browser caches must never persist account chat,
+        # Clients may maintain their own local cache. Intermediary/browser caches
+        # must never persist account chat,
         # search results, files, voice negotiation data, or bearer-auth output.
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"

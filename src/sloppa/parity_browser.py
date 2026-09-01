@@ -523,7 +523,7 @@ class ParityBrowser:
         voice_mode: str = "wingman",
         language_code: str = "auto",
     ) -> dict[str, Any]:
-        """Proxy the Flutter client's WebRTC offer through the logged-in SPA."""
+        """Proxy a caller's WebRTC offer through the logged-in SPA."""
         if not offer_sdp.strip().startswith("v=0"):
             raise ParityBrowserError("offer_sdp must be WebRTC SDP text")
         token = await self.driver.ensure_token()
